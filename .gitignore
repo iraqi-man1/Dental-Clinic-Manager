@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+tsconfig.tsbuildinfo
+.env*
+!.env.example
+*.log
+.DS_Store
+coverage/
+
+# Local Netlify folder
+.netlify
+supabase/.temp/
