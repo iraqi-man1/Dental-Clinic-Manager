@@ -23,10 +23,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Appointment, ClinicMember, Patient, ProcedureCatalogItem } from "@/lib/types";
 import { cn, iraqiMobileValidationMessage, normalizeIraqiMobileNumber } from "@/lib/utils";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
+import { FilterBar } from "@/components/clinic/app-ui";
 
 const timeSlots = Array.from({ length: 20 }, (_, index) => {
   const minutes = 8 * 60 + index * 30;
@@ -178,12 +180,12 @@ function NewAppointment({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-            {(["existing", "new"] as const).map((mode) => <button key={mode} type="button" onClick={() => setPatientMode(mode)} className={cn("rounded-lg px-3 py-2 text-xs font-semibold", patientMode === mode && "bg-white text-primary shadow-sm")}>{mode === "existing" ? "Existing patient" : "New patient"}</button>)}
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-default p-1">
+            {(["existing", "new"] as const).map((mode) => <Button key={mode} type="button" size="sm" variant={patientMode === mode ? "default" : "ghost"} onClick={() => setPatientMode(mode)}>{mode === "existing" ? "Existing patient" : "New patient"}</Button>)}
           </div>
           {patientMode === "existing" ? <label className="block text-xs font-semibold">
             Patient
-            <select
+            <Select
               name="patient"
               required={patientMode === "existing"}
               className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"
@@ -193,7 +195,7 @@ function NewAppointment({
                   {p.name} · {p.patientNo}
                 </option>
               ))}
-            </select>
+            </Select>
           </label> : <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold sm:col-span-2">Patient name<Input name="newPatientName" required className="mt-1.5" /></label>
             <label className="text-xs font-semibold">Phone<Input name="newPatientPhone" required inputMode="tel" dir="ltr" placeholder="07XXXXXXXXX or +9647XXXXXXXXX" className="mt-1.5" /></label>
@@ -201,9 +203,9 @@ function NewAppointment({
           </div>}
           <label className="block text-xs font-semibold">
             Procedure
-            <select name="procedure" required value={procedureId || procedures[0]?.id || ""} onChange={(event) => setProcedureId(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
+            <Select name="procedure" required value={procedureId || procedures[0]?.id || ""} onChange={(event) => setProcedureId(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
               {procedures.map((procedure) => <option key={procedure.id} value={procedure.id}>{procedure.name}</option>)}
-            </select>
+            </Select>
           </label>
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm">Treatment price: <strong>{selectedProcedure ? formatMoney(selectedProcedure.defaultPrice) : "Configure the Price List first"}</strong><p className="mt-1 text-[10px] text-muted-foreground">Saved as a price snapshot for this appointment.</p></div>
           <div className="grid grid-cols-2 gap-3">
@@ -219,14 +221,14 @@ function NewAppointment({
             </label>
             <label className="text-xs font-semibold">
               Room
-              <select
+              <Select
                 name="room"
                 className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"
               >
                 <option>Room 1</option>
                 <option>Room 2</option>
                 <option>Room 3</option>
-              </select>
+              </Select>
             </label>
             <label className="text-xs font-semibold">
               Start time
@@ -251,13 +253,13 @@ function NewAppointment({
           </div>
           <label className="block text-xs font-semibold">
             Doctor
-            <select
+            <Select
               name="doctor"
               required
               className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"
             >
               {doctors.map((doctor) => <option key={doctor.id} value={doctor.id} data-no-translate>{doctor.fullName}</option>)}
-            </select>
+            </Select>
           </label>
           <DialogFooter>
             <Button
@@ -462,7 +464,7 @@ export function AppointmentsPage({
   };
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      <FilterBar className="justify-between xl:flex-row">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => step(-1)}>
             <ChevronLeft />
@@ -476,7 +478,7 @@ export function AppointmentsPage({
           <Button variant="outline" size="icon" onClick={() => step(1)}>
             <ChevronRight />
           </Button>
-          <h2 className="ml-1 text-sm font-bold">
+          <h2 className="ms-1 text-sm font-bold">
             {view === "month"
               ? format(current, "MMMM yyyy")
               : view === "day"
@@ -486,11 +488,11 @@ export function AppointmentsPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-52 flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-white pl-9"
+              className="bg-white ps-9"
               placeholder="Search schedule…"
             />
           </div>
@@ -503,7 +505,7 @@ export function AppointmentsPage({
           </Tabs>
           {canManage && <NewAppointment patients={patients} procedures={procedures} doctors={doctors} onAdd={onAdd} onCreatePatient={onCreatePatient} />}
         </div>
-      </div>
+      </FilterBar>
       <Card className="overflow-hidden">
         <CardHeader className="flex-row items-center justify-between border-b">
           <div>

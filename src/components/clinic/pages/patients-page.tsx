@@ -30,6 +30,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DentalChart } from "@/components/clinic/dental-chart";
 import { TreatmentsPage } from "@/components/clinic/pages/treatments-page";
@@ -38,6 +40,12 @@ import { cn, iraqiMobileValidationMessage, normalizeIraqiMobileNumber } from "@/
 import { toast } from "sonner";
 import { uploadPatientFile } from "@/lib/supabase/clinic-data";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
+import {
+  DataTable,
+  EmptyState,
+  FilterBar,
+  type DataTableColumn,
+} from "@/components/clinic/app-ui";
 
 function SessionPaymentDialog({ session, onPay, onClose }: {
   session: TreatmentSession | null;
@@ -73,14 +81,14 @@ function SessionPaymentDialog({ session, onPay, onClose }: {
       </div>
       <form onSubmit={submit} className="space-y-4">
         <label className="block text-xs font-semibold">Payment status
-          <select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
+          <Select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
             <option value="full">Paid in Full</option><option value="partial">Partial Payment</option><option value="not_paid">Not Paid</option>
-          </select>
+          </Select>
         </label>
         {mode === "full" && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">Amount to collect: <strong>{formatMoney(session.remaining)}</strong></div>}
         {mode === "partial" && <label className="block text-xs font-semibold">Amount received<Input name="amount" type="number" min="0.01" max={session.remaining} step="0.01" required className="mt-1.5" /></label>}
         {mode !== "not_paid" && <>
-          <label className="block text-xs font-semibold">Method<select name="method" className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Cash</option><option>Card</option><option>Insurance</option><option>Bank transfer</option></select></label>
+          <label className="block text-xs font-semibold">Method<Select name="method" className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Cash</option><option>Card</option><option>Insurance</option><option>Bank transfer</option></Select></label>
           <label className="block text-xs font-semibold">Reference<Input name="reference" className="mt-1.5" placeholder="Optional" /></label>
         </>}
         <DialogFooter><Button type="submit" disabled={saving || session.remaining <= 0}>{saving ? "Saving…" : mode === "not_paid" ? "Confirm not paid" : "Confirm payment"}</Button></DialogFooter>
@@ -178,14 +186,14 @@ function AddPatientDialog({ onAdd }: { onAdd: (patient: Patient) => Promise<Pati
               />
             </Field>
             <Field label="Gender">
-              <select
+              <Select
                 name="gender"
                 className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
               >
                 <option value="Female">Female</option>
                 <option value="Male">Male</option>
                 <option value="Other">Other</option>
-              </select>
+              </Select>
             </Field>
             <Field label="Phone">
               <Input
@@ -212,7 +220,7 @@ function AddPatientDialog({ onAdd }: { onAdd: (patient: Patient) => Promise<Pati
             </Field>
           </div>
           <Field label="Clinical note">
-            <textarea
+            <Textarea
               name="notes"
               rows={3}
               className="w-full rounded-xl border p-3 text-sm outline-none focus:ring-4 focus:ring-primary/10"
@@ -281,12 +289,13 @@ function PatientDetails({
   };
   return (
     <div className="space-y-5">
-      <button
+      <Button
         onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary"
+        variant="ghost"
+        size="sm"
       >
-        <ArrowLeft className="size-4" /> Back to all patients
-      </button>
+        <ArrowLeft className="size-4 rtl:rotate-180" /> Back to all patients
+      </Button>
       <Card>
         <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col gap-5 md:flex-row md:items-center">
@@ -356,7 +365,7 @@ function PatientDetails({
                     {patient.allergies.length ? (
                       patient.allergies.map((a) => (
                         <Badge variant="danger" key={a} data-no-translate>
-                          <AlertTriangle className="mr-1 size-3" />
+                          <AlertTriangle className="me-1 size-3" />
                           {a}
                         </Badge>
                       ))
@@ -484,7 +493,7 @@ function PatientDetails({
                     <Activity className="size-4" />
                   </div>
                   {i < patientAppointments.length - 1 && (
-                    <div className="absolute left-[17px] top-9 h-[calc(100%-20px)] w-px bg-border" />
+                    <div className="absolute start-[17px] top-9 h-[calc(100%-20px)] w-px bg-border" />
                   )}
                   <div className="flex-1 rounded-xl border p-4">
                     <div className="flex flex-wrap justify-between gap-2">
@@ -550,9 +559,10 @@ function PatientDetails({
                   { name: "Bitewing · right", date: "Aug 24, 2026" },
                   { name: "Panoramic X-ray", date: "Mar 04, 2026" },
                 ].map((image) => (
-                  <button
+                  <Button
                     key={image.name}
-                    className="group grid h-48 place-items-center rounded-2xl border border-dashed bg-slate-50 text-center transition hover:border-primary hover:bg-primary/5"
+                    variant="outline"
+                    className="group grid h-48 place-items-center rounded-2xl border-dashed bg-surface-secondary text-center hover:border-primary hover:bg-primary/5"
                   >
                     <div>
                       <FileImage className="mx-auto size-8 text-slate-300 group-hover:text-primary" />
@@ -561,7 +571,7 @@ function PatientDetails({
                         {image.date}
                       </p>
                     </div>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </CardContent>
@@ -686,20 +696,89 @@ export function PatientsPage({
       />
     );
   }
+  const columns: DataTableColumn<Patient>[] = [
+    {
+      key: "patient",
+      label: "Patient",
+      isRowHeader: true,
+      render: (patient) => (
+        <div className="flex min-w-52 items-center gap-3">
+          <Avatar>
+            <AvatarFallback className={patient.avatarColor}>{patient.initials}</AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="text-sm font-semibold" data-no-translate>{patient.name}</p>
+            <p className="text-xs text-muted-foreground">{patient.patientNo} · {patient.age} yrs</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "contact",
+      label: "Contact",
+      render: (patient) => (
+        <div className="min-w-44">
+          <p className="text-xs font-medium" data-no-translate>{patient.phone}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground" data-no-translate>{patient.email}</p>
+        </div>
+      ),
+    },
+    { key: "lastVisit", label: "Last visit", render: (patient) => <span className="text-xs font-medium">{patient.lastVisit}</span> },
+    {
+      key: "alerts",
+      label: "Alerts",
+      render: (patient) => patient.allergies.length ? (
+        <Badge variant="danger" data-no-translate><AlertTriangle className="me-1 size-3" />{patient.allergies[0]}</Badge>
+      ) : <span className="text-xs text-muted-foreground">None</span>,
+    },
+    {
+      key: "balance",
+      label: "Balance",
+      render: (patient) => patient.balance ? (
+        <span className="text-sm font-semibold">{formatMoney(patient.balance)}</span>
+      ) : <span className="text-sm font-semibold text-success">Paid</span>,
+    },
+    {
+      key: "sessions",
+      label: "Treatment sessions",
+      render: (patient) => {
+        const allSessions = patientSessions(patient.id);
+        const completed = allSessions.filter((session) => session.status === "completed").length;
+        const current = relevantSession(patient.id);
+        return <div className="min-w-40"><p className="text-xs font-semibold">{completed}/{allSessions.length} completed</p><p className="mt-1 text-[10px] text-muted-foreground">{Math.max(0, allSessions.length - completed)} remaining{current ? ` · Session ${current.sessionNumber}` : ""}</p></div>;
+      },
+    },
+    {
+      key: "payment",
+      label: "Session payment",
+      render: (patient) => {
+        const current = relevantSession(patient.id);
+        if (!current) return <span className="text-xs text-muted-foreground">No upcoming session</span>;
+        return (
+          <div className="flex min-w-40 items-center gap-2">
+            <Badge variant={current.paymentStatus === "Paid" ? "success" : current.paymentStatus === "Partially Paid" ? "warning" : "danger"}>{current.paymentStatus}</Badge>
+            {canCollect && current.paymentStatus !== "Paid" ? <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setPaymentSession(current); }}><Banknote /> Pay</Button> : null}
+          </div>
+        );
+      },
+    },
+    { key: "status", label: "Status", render: (patient) => <Badge variant={patient.status === "Active" ? "success" : "secondary"}>{patient.status}</Badge> },
+    { key: "action", label: <span className="sr-only">Open patient</span>, render: () => <ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" /> },
+  ];
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <FilterBar className="justify-between">
         <div className="flex flex-1 flex-col gap-2 sm:flex-row">
           <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="bg-white pl-9"
+              className="bg-white ps-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search patients…"
             />
           </div>
-          <select
+          <Select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="h-10 rounded-xl border bg-white px-3 text-sm"
@@ -707,115 +786,27 @@ export function PatientsPage({
             <option>All patients</option>
             <option>Active</option>
             <option>Inactive</option>
-          </select>
+          </Select>
         </div>
         <AddPatientDialog onAdd={onAdd} />
-      </div>
+      </FilterBar>
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-left">
-            <thead>
-              <tr className="border-b bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-3.5">Patient</th>
-                <th className="px-4 py-3.5">Contact</th>
-                <th className="px-4 py-3.5">Last visit</th>
-                <th className="px-4 py-3.5">Alerts</th>
-                <th className="px-4 py-3.5">Balance</th>
-                <th className="px-4 py-3.5">Treatment sessions</th>
-                <th className="px-4 py-3.5">Session payment</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((patient) => {
-                const allSessions = patientSessions(patient.id);
-                const completed = allSessions.filter((session) => session.status === "completed").length;
-                const current = relevantSession(patient.id);
-                return (
-                <tr
-                  key={patient.id}
-                  onClick={() => setSelected(patient)}
-                  className="cursor-pointer border-b last:border-0 hover:bg-slate-50/70"
-                >
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback className={patient.avatarColor}>
-                          {patient.initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-semibold" data-no-translate>{patient.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {patient.patientNo} · {patient.age} yrs
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <p className="text-xs font-medium">{patient.phone}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground" data-no-translate>
-                      {patient.email}
-                    </p>
-                  </td>
-                  <td className="px-4 py-4 text-xs font-medium">
-                    {patient.lastVisit}
-                  </td>
-                  <td className="px-4 py-4">
-                    {patient.allergies.length ? (
-                      <Badge variant="danger" data-no-translate>
-                        <AlertTriangle className="mr-1 size-3" />
-                        {patient.allergies[0]}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        None
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-sm font-semibold">
-                    {patient.balance ? (
-                            formatMoney(patient.balance)
-                    ) : (
-                      <span className="text-emerald-600">Paid</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4">
-                    <p className="text-xs font-semibold">{completed}/{allSessions.length} completed</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">{Math.max(0, allSessions.length - completed)} remaining{current ? ` · Session ${current.sessionNumber}` : ""}</p>
-                  </td>
-                  <td className="px-4 py-4">
-                    {current ? <div className="flex items-center gap-2">
-                      <Badge variant={current.paymentStatus === "Paid" ? "success" : current.paymentStatus === "Partially Paid" ? "warning" : "danger"}>{current.paymentStatus}</Badge>
-                      {canCollect && current.paymentStatus !== "Paid" && <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setPaymentSession(current); }}><Banknote /> Pay</Button>}
-                    </div> : <span className="text-xs text-muted-foreground">No upcoming session</span>}
-                  </td>
-                  <td className="px-4 py-4">
-                    <Badge
-                      variant={
-                        patient.status === "Active" ? "success" : "secondary"
-                      }
-                    >
-                      {patient.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-4">
-                    <ChevronRight className="size-4 text-muted-foreground" />
-                  </td>
-                </tr>
-              );})}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length === 0 && (
-          <div className="grid place-items-center p-14 text-center">
-            <UserRound className="size-10 text-slate-300" />
-            <p className="mt-3 font-semibold">No patients found</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Try a different name or status filter.
-            </p>
-          </div>
+        {filtered.length ? (
+          <DataTable
+            ariaLabel="Patients"
+            columns={columns}
+            rows={filtered}
+            getRowKey={(patient) => patient.id}
+            contentClassName="min-w-[1120px]"
+            onRowAction={setSelected}
+          />
+        ) : (
+          <EmptyState
+            icon={UserRound}
+            title="No patients found"
+            description="Try a different name or status filter."
+            className="m-5"
+          />
         )}
       </Card>
       <SessionPaymentDialog session={paymentSession} onClose={() => setPaymentSession(null)} onPay={onSessionPayment} />

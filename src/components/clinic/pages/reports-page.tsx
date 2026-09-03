@@ -16,8 +16,16 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
 import type { Appointment, Patient, Payment } from "@/lib/types";
+import {
+  DataTable,
+  EmptyState,
+  FilterBar,
+  StatCard,
+  type DataTableColumn,
+} from "@/components/clinic/app-ui";
 
 function csvCell(value: string | number) {
   let text = String(value ?? "");
@@ -59,6 +67,13 @@ export function ReportsPage({ payments, patients, appointments }: {
     providers[appointment.doctor] = provider; return providers;
   }, {} as Record<string, { name: string; production: number; patients: Set<string>; total: number; completed: number }>));
   const providers = [...new Set(appointments.map((appointment) => appointment.doctor))];
+  type ProviderPerformance = (typeof providerPerformance)[number];
+  const providerColumns: DataTableColumn<ProviderPerformance>[] = [
+    { key: "provider", label: "Provider", isRowHeader: true, render: (provider) => <span className="font-semibold" data-no-translate>{provider.name}</span> },
+    { key: "production", label: "Production", render: (provider) => formatMoney(provider.production) },
+    { key: "patients", label: "Patients", render: (provider) => provider.patients.size },
+    { key: "utilization", label: "Utilization", render: (provider) => <span className="font-semibold text-primary">{provider.total ? Math.round((provider.completed / provider.total) * 100) : 0}%</span> },
+  ];
   const downloadReport = () => {
     try {
       const rows: (string | number)[][] = [
@@ -138,23 +153,23 @@ export function ReportsPage({ payments, patients, appointments }: {
   };
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap justify-between gap-3">
+      <FilterBar className="justify-between">
         <div className="flex gap-2">
-          <select className="h-10 rounded-xl border bg-white px-3 text-sm">
+          <Select className="h-10 rounded-xl border bg-white px-3 text-sm">
             <option>All live records</option>
             <option>Last 90 days</option>
             <option>This year</option>
-          </select>
-          <select className="h-10 rounded-xl border bg-white px-3 text-sm">
+          </Select>
+          <Select className="h-10 rounded-xl border bg-white px-3 text-sm">
             <option>All providers</option>
             {providers.map((provider) => <option key={provider} data-no-translate>{provider}</option>)}
-          </select>
+          </Select>
         </div>
         <Button onClick={downloadReport}>
           <Download />
           Download report
         </Button>
-      </div>
+      </FilterBar>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
@@ -171,25 +186,16 @@ export function ReportsPage({ payments, patients, appointments }: {
           },
           { l: "New patients", v: String(patients.length), d: "Live records", icon: Users },
           { l: "Chair utilization", v: appointments.length ? `${Math.round((completedVisits / appointments.length) * 100)}%` : "0%", d: `${appointments.length} scheduled`, icon: TrendingUp },
-        ].map((x) => {
-          const Icon = x.icon;
-          return (
-            <Card key={x.l}>
-              <CardContent className="p-5">
-                <div className="flex justify-between">
-                  <p className="text-xs text-muted-foreground">{x.l}</p>
-                  <Icon className="size-4 text-primary" />
-                </div>
-                <p className="mt-2 text-2xl font-bold">
-                  {x.amount ? formatMoney(x.amount) : x.v}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-emerald-600">
-                  {x.d}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        ].map((x, index) => (
+          <StatCard
+            key={x.l}
+            label={x.l}
+            value={x.amount !== undefined ? formatMoney(x.amount) : x.v}
+            note={x.d}
+            icon={x.icon}
+            tone={index === 0 ? "accent" : index === 1 ? "success" : index === 2 ? "info" : "warning"}
+          />
+        ))}
       </div>
       <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
         <Card>
@@ -321,30 +327,7 @@ export function ReportsPage({ payments, patients, appointments }: {
             <CardTitle>Provider performance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="pb-3">Provider</th>
-                    <th className="pb-3">Production</th>
-                    <th className="pb-3">Patients</th>
-                    <th className="pb-3">Utilization</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {providerPerformance.map((provider) => (
-                    <tr key={provider.name} className="border-b last:border-0">
-                      <td className="py-4 font-semibold" data-no-translate>{provider.name}</td>
-                      <td className="py-4">{formatMoney(provider.production)}</td>
-                      <td className="py-4">{provider.patients.size}</td>
-                      <td className="py-4 font-semibold text-primary">
-                        {provider.total ? Math.round((provider.completed / provider.total) * 100) : 0}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {providerPerformance.length ? <DataTable ariaLabel="Provider performance" columns={providerColumns} rows={providerPerformance} getRowKey={(provider) => provider.name} /> : <EmptyState icon={Users} title="No provider activity yet" description="Provider performance will appear after appointments are scheduled." />}
           </CardContent>
         </Card>
       </div>

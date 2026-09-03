@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,9 +26,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { ClinicRole, InventoryItem, PurchaseOrder, PurchaseOrderItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { persistPurchaseOrder } from "@/lib/supabase/clinic-data";
+import {
+  DataTable,
+  EmptyState,
+  FilterBar,
+  StatCard,
+  type DataTableColumn,
+} from "@/components/clinic/app-ui";
 
 function PurchaseOrderDialog({ items, clinic, open, onOpenChange }: {
   items: InventoryItem[];
@@ -71,7 +79,7 @@ function PurchaseOrderDialog({ items, clinic, open, onOpenChange }: {
   </DialogContent></Dialog>;
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>Create purchase order</DialogTitle><DialogDescription>Select stock items or add any material manually. Saving this order does not change inventory quantities.</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Order date<Input name="orderDate" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} className="mt-1.5" /></label><label className="text-xs font-semibold">Supplier name<Input name="supplierName" className="mt-1.5" /></label><label className="text-xs font-semibold">Supplier contact<Input name="supplierContact" className="mt-1.5" /></label><label className="text-xs font-semibold">Delivery address<Input name="deliveryAddress" className="mt-1.5" /></label></div>
-      <div className="rounded-2xl border p-4"><div className="flex flex-wrap gap-2"><select defaultValue="" onChange={(event) => { addExisting(event.target.value); event.target.value = ""; }} className="h-10 min-w-60 flex-1 rounded-xl border bg-white px-3 text-sm"><option value="">Select inventory item…</option>{items.map((item) => <option key={item.id} value={item.id} data-no-translate>{item.name} · {item.stock} {item.unit}</option>)}</select><Button type="button" variant="outline" onClick={addManual}><Plus /> Manual item</Button></div>
+      <div className="rounded-2xl border p-4"><div className="flex flex-wrap gap-2"><Select defaultValue="" onChange={(event) => { addExisting(event.target.value); event.target.value = ""; }} className="h-10 min-w-60 flex-1 rounded-xl border bg-white px-3 text-sm"><option value="">Select inventory item…</option>{items.map((item) => <option key={item.id} value={item.id} data-no-translate>{item.name} · {item.stock} {item.unit}</option>)}</Select><Button type="button" variant="outline" onClick={addManual}><Plus /> Manual item</Button></div>
         <div className="mt-4 space-y-3">{lines.map((line, index) => <div key={line.id ?? line.inventoryItemId ?? index} className="grid items-end gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-[2fr_110px_1fr_36px]"><label className="text-[10px] font-semibold">Item<Input value={line.itemName} onChange={(event) => updateLine(index, { itemName: event.target.value })} /></label><label className="text-[10px] font-semibold">Quantity<Input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} /></label><label className="text-[10px] font-semibold">Notes<Input value={line.notes ?? ""} onChange={(event) => updateLine(index, { notes: event.target.value })} /></label><Button type="button" size="icon" variant="ghost" onClick={() => setLines((current) => current.filter((_, position) => position !== index))}><Trash2 /></Button></div>)}</div>
       </div><label className="block text-xs font-semibold">Order notes<Input name="notes" className="mt-1.5" /></label><DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save & preview"}</Button></DialogFooter></form>
   </DialogContent></Dialog>;
@@ -142,6 +150,32 @@ export function InventoryPage({
     setOpen(false);
   };
   const low = current.filter((i) => i.stock <= i.minimum);
+  const columns: DataTableColumn<InventoryItem>[] = [
+    {
+      key: "item",
+      label: "Item",
+      isRowHeader: true,
+      render: (item) => {
+        const needsStock = item.stock <= item.minimum;
+        return <div className="min-w-40"><p className="text-sm font-semibold" data-no-translate>{item.name}</p><Badge variant={needsStock ? "danger" : "success"} className="mt-1">{needsStock ? "Low stock" : "In stock"}</Badge></div>;
+      },
+    },
+    { key: "category", label: "Category", render: (item) => <span className="text-xs">{item.category}</span> },
+    { key: "sku", label: "SKU", render: (item) => <span className="font-mono text-xs text-muted-foreground" data-no-translate>{item.sku}</span> },
+    {
+      key: "stock",
+      label: "In stock",
+      render: (item) => <span className={cn("text-sm font-bold", item.stock <= item.minimum && "text-danger")}>{item.stock} <span className="text-[10px] font-normal text-muted-foreground">{item.unit}</span></span>,
+    },
+    { key: "minimum", label: "Reorder at", render: (item) => <span className="text-xs">{item.minimum} {item.unit}</span> },
+    { key: "supplier", label: "Supplier", render: (item) => <span className="min-w-32 text-xs" data-no-translate>{item.supplier}</span> },
+    { key: "expiry", label: "Expiry", render: (item) => <span className="text-xs text-muted-foreground">{item.expiry ?? "—"}</span> },
+    {
+      key: "adjust",
+      label: "Adjust",
+      render: (item) => <div className="flex items-center gap-1"><Button size="icon" variant="outline" className="size-8" onClick={() => adjust(item.id, -1)} aria-label={`Reduce ${item.name} stock`}><Minus /></Button><Button size="icon" variant="outline" className="size-8" onClick={() => adjust(item.id, 1)} aria-label={`Increase ${item.name} stock`}><Plus /></Button></div>,
+    },
+  ];
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-3">
@@ -167,30 +201,7 @@ export function InventoryPage({
             icon: PackageCheck,
             color: "bg-emerald-50 text-emerald-700",
           },
-        ].map((s) => {
-          const Icon = s.icon;
-          return (
-            <Card key={s.label}>
-              <CardContent className="flex items-center gap-4 p-5">
-                <div
-                  className={cn(
-                    "grid size-11 place-items-center rounded-xl",
-                    s.color,
-                  )}
-                >
-                  <Icon className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
-                  <p className="mt-1 text-2xl font-bold">{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {s.detail}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+        ].map((stat, index) => <StatCard key={stat.label} label={stat.label} value={stat.value} note={stat.detail} icon={stat.icon} tone={index === 0 ? "info" : index === 1 ? "danger" : "success"} />)}
       </div>
       {low.length > 0 && (
         <div className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 sm:flex-row sm:items-center">
@@ -216,18 +227,18 @@ export function InventoryPage({
           </Button>}
         </div>
       )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+      <FilterBar className="justify-between">
         <div className="flex flex-1 gap-2">
           <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-white pl-9"
+              className="bg-white ps-9"
               placeholder="Search inventory…"
             />
           </div>
-          <select
+          <Select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="rounded-xl border bg-white px-3 text-sm"
@@ -235,7 +246,7 @@ export function InventoryPage({
             {categories.map((c) => (
               <option key={c}>{c}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex gap-2">
           {canPurchase && <Button variant="outline" onClick={() => setPurchaseOpen(true)}><ShoppingCart /> Create purchase order</Button>}
@@ -251,87 +262,9 @@ export function InventoryPage({
             Add item
           </Button>
         </div>
-      </div>
+      </FilterBar>
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left">
-            <thead>
-              <tr className="border-b bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-3.5">Item</th>
-                <th className="px-4 py-3.5">Category</th>
-                <th className="px-4 py-3.5">SKU</th>
-                <th className="px-4 py-3.5">In stock</th>
-                <th className="px-4 py-3.5">Reorder at</th>
-                <th className="px-4 py-3.5">Supplier</th>
-                <th className="px-4 py-3.5">Expiry</th>
-                <th className="px-4 py-3.5">Adjust</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((item) => {
-                const low = item.stock <= item.minimum;
-                return (
-                  <tr
-                    key={item.id}
-                    className="border-b last:border-0 hover:bg-slate-50"
-                  >
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-semibold" data-no-translate>{item.name}</p>
-                      <Badge
-                        variant={low ? "danger" : "success"}
-                        className="mt-1"
-                      >
-                        {low ? "Low stock" : "In stock"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-4 text-xs">{item.category}</td>
-                    <td className="px-4 py-4 font-mono text-xs text-muted-foreground" data-no-translate>
-                      {item.sku}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-4 py-4 text-sm font-bold",
-                        low && "text-rose-600",
-                      )}
-                    >
-                      {item.stock}{" "}
-                      <span className="text-[10px] font-normal text-muted-foreground">
-                        {item.unit}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-xs">
-                      {item.minimum} {item.unit}
-                    </td>
-                    <td className="px-4 py-4 text-xs" data-no-translate>{item.supplier}</td>
-                    <td className="px-4 py-4 text-xs text-muted-foreground">
-                      {item.expiry ?? "—"}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="size-8"
-                          onClick={() => adjust(item.id, -1)}
-                        >
-                          <Minus />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="size-8"
-                          onClick={() => adjust(item.id, 1)}
-                        >
-                          <Plus />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {visible.length ? <DataTable ariaLabel="Inventory" columns={columns} rows={visible} getRowKey={(item) => item.id} contentClassName="min-w-[900px]" /> : <EmptyState icon={Boxes} title="No inventory items found" description="Try a different search or category, or add a new clinical supply." className="m-5" />}
       </Card>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

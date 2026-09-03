@@ -1,76 +1,93 @@
 "use client";
 
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { Modal } from "@heroui/react";
 import { cn } from "@/lib/utils";
 
-export const Dialog = DialogPrimitive.Root;
-export const DialogTrigger = DialogPrimitive.Trigger;
-export const DialogClose = DialogPrimitive.Close;
+type DialogProps = {
+  children: React.ReactNode;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
+export function Dialog({ children, open, defaultOpen, onOpenChange }: DialogProps) {
+  return (
+    <Modal isOpen={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+      {children}
+    </Modal>
+  );
+}
+
+export const DialogTrigger = Modal.Trigger;
+export const DialogClose = Modal.CloseTrigger;
 
 export function DialogContent({
   className,
   children,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
-      <DialogPrimitive.Content
-        className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border border-slate-300 bg-background p-6 shadow-[0_24px_64px_rgba(15,23,42,.22)] outline-none",
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        <DialogPrimitive.Close
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Close"
+    <Modal.Backdrop variant="blur">
+      <Modal.Container size="lg" placement="auto" scroll="inside">
+        <Modal.Dialog
+          className={cn(
+            "max-h-[calc(100dvh-2rem)] max-w-lg rounded-3xl border-border bg-overlay p-5 shadow-overlay sm:p-6",
+            className,
+          )}
         >
-          <X className="size-4" />
-        </DialogPrimitive.Close>
-      </DialogPrimitive.Content>
-    </DialogPrimitive.Portal>
+          <Modal.CloseTrigger aria-label="Close" />
+          {children}
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }
+
 export function DialogHeader({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  return <div className={cn("space-y-1.5", className)} {...props} />;
+  return <Modal.Header className={cn("space-y-1.5", className)} {...props} />;
 }
+
 export function DialogTitle({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+}: React.ComponentProps<"h2">) {
   return (
-    <DialogPrimitive.Title
-      className={cn("text-xl font-bold tracking-[-0.02em]", className)}
+    <Modal.Heading
+      className={cn("text-lg font-bold tracking-[-0.02em]", className)}
       {...props}
     />
   );
 }
+
 export function DialogDescription({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: React.ComponentProps<"p">) {
   return (
-    <DialogPrimitive.Description
-      className={cn("text-sm text-muted-foreground", className)}
+    <p
+      className={cn(
+        "max-w-prose text-sm leading-5 text-muted-foreground",
+        className,
+      )}
       {...props}
     />
   );
 }
+
 export function DialogFooter({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   return (
-    <div
+    <Modal.Footer
       className={cn(
-        "mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}

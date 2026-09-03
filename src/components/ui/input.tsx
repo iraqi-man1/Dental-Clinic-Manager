@@ -1,19 +1,27 @@
 import * as React from "react";
+import { Input as HeroInput } from "@heroui/react";
 import { cn } from "@/lib/utils";
 
 export function Input({
   className,
   type,
+  disabled,
+  required,
+  readOnly,
   ...props
 }: React.ComponentProps<"input">) {
   return (
-    <input
+    <HeroInput
       type={type}
+      disabled={disabled}
+      required={required}
+      readOnly={readOnly}
+      fullWidth
       className={cn(
-        "flex h-10 w-full rounded-lg border border-input bg-background px-3.5 py-2 text-sm shadow-[inset_0_1px_1px_rgba(15,23,42,.025)] outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground/85 hover:border-slate-400 focus:border-primary focus:ring-3 focus:ring-primary/12 disabled:opacity-50",
+        "h-10 w-full rounded-xl border-input bg-white px-3.5 text-sm shadow-field placeholder:text-muted-foreground/80",
         className,
       )}
-      {...props}
+      {...(props as unknown as React.ComponentProps<typeof HeroInput>)}
     />
   );
 }

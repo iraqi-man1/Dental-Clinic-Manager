@@ -2,6 +2,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Switch } from "@heroui/react";
 import {
   Bell,
   Building2,
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
 import { cn } from "@/lib/utils";
 import type { ClinicInfo } from "@/lib/types";
@@ -29,23 +31,16 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "relative h-6 w-11 rounded-full transition",
-        checked ? "bg-primary" : "bg-slate-200",
-      )}
+    <Switch
+      aria-label="Toggle preference"
+      isSelected={checked}
+      onChange={onChange}
+      size="sm"
     >
-      <span
-        className={cn(
-          "absolute top-1 size-4 rounded-full bg-white shadow transition",
-          checked ? "left-6" : "left-1",
-        )}
-      />
-    </button>
+      <Switch.Control>
+        <Switch.Thumb />
+      </Switch.Control>
+    </Switch>
   );
 }
 
@@ -85,19 +80,15 @@ export function SettingsPage({ clinic, onSaveClinic }: {
           {sections.map((s) => {
             const Icon = s.icon;
             return (
-              <button
+              <Button
                 key={s.key}
                 onClick={() => setActive(s.key)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium",
-                  active === s.key
-                    ? "bg-primary text-white"
-                    : "text-slate-600 hover:bg-slate-50",
-                )}
+                variant={active === s.key ? "default" : "ghost"}
+                className="w-full justify-start"
               >
                 <Icon className="size-4" />
                 {s.label}
-              </button>
+              </Button>
             );
           })}
         </CardContent>
@@ -166,7 +157,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
             <CardContent className="space-y-5">
               <label className="block max-w-md text-xs font-semibold">
                 Application language
-                <select
+                <Select
                   value={language}
                   onChange={(event) => {
                     setLanguage(event.target.value as "en" | "ar");
@@ -176,11 +167,11 @@ export function SettingsPage({ clinic, onSaveClinic }: {
                 >
                   <option value="en">English</option>
                   <option value="ar">Arabic</option>
-                </select>
+                </Select>
               </label>
               <label className="block max-w-md text-xs font-semibold">
                 Clinic currency
-                <select
+                <Select
                   value={currency}
                   onChange={(event) => {
                     setCurrency(event.target.value as "USD" | "IQD");
@@ -190,7 +181,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
                 >
                   <option value="IQD">Iraqi Dinar (IQD)</option>
                   <option value="USD">US Dollar (USD)</option>
-                </select>
+                </Select>
               </label>
             </CardContent>
           </Card>
@@ -276,11 +267,11 @@ export function SettingsPage({ clinic, onSaveClinic }: {
               </div>
               <label className="block text-xs font-semibold">
                 Automatic sign-out
-                <select className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
+                <Select className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
                   <option>After 30 minutes of inactivity</option>
                   <option>After 1 hour</option>
                   <option>At the end of the day</option>
-                </select>
+                </Select>
               </label>
               <Button onClick={() => toast.success("Security policy updated")}>
                 Update security policy

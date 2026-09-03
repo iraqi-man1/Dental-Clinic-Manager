@@ -69,13 +69,14 @@ function Tooth({ number, condition, states, selected, onClick }: {
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
       aria-pressed={selected}
       aria-label={`Tooth ${number}, ${condition}`}
       className={cn(
-        "group flex min-w-11 flex-col items-center gap-1 rounded-xl border border-transparent px-1 py-1.5 transition hover:bg-white hover:shadow-sm",
+        "group h-auto min-w-11 flex-col items-center gap-1 rounded-xl border border-transparent px-1 py-1.5 transition hover:bg-white hover:shadow-sm",
         selected && "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/15",
         condition === "Missing" && "opacity-45",
       )}
@@ -85,7 +86,7 @@ function Tooth({ number, condition, states, selected, onClick }: {
         <SurfaceMap states={states} />
         {condition === "Missing" && <span className="absolute inset-0 grid place-items-center text-3xl font-light text-slate-500">×</span>}
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -184,11 +185,11 @@ export function DentalChart({
             <p className="mb-2 text-xs font-semibold">Tooth surfaces</p>
             <div className="flex flex-wrap gap-2">
               {toothSurfaces.map((surface) => (
-                <button key={surface.value} type="button" onClick={() => toggleSurface(surface.value)}
-                  className={cn("rounded-xl border bg-white px-3 py-2 text-xs font-semibold transition",
+                <Button key={surface.value} type="button" size="sm" variant="outline" onClick={() => toggleSurface(surface.value)}
+                  className={cn("rounded-xl text-xs",
                     selectedSurfaces.includes(surface.value) && "border-primary bg-primary/5 text-primary ring-2 ring-primary/10")}>
                   <span className="me-1.5 text-[10px] text-muted-foreground">{surface.short}</span>{surface.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -197,10 +198,9 @@ export function DentalChart({
               <p className="mb-2 text-xs font-semibold">Mark selected surfaces</p>
               <div className="flex flex-wrap gap-2">
                 {chartStates.map((state) => (
-                  <button key={state.value} type="button" onClick={() => assignSurfaceState(state.value)}
-                    className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold hover:bg-slate-50">
+                  <Button key={state.value} type="button" size="sm" variant="outline" onClick={() => assignSurfaceState(state.value)}>
                     <span className={cn("size-3 rounded-full border", state.color)} />{state.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -209,13 +209,13 @@ export function DentalChart({
             <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Whole-tooth condition</summary>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {conditions.map((item) => (
-                <button key={item.value} type="button" onClick={() => assignCondition(item.value)}
-                  className={cn("flex items-center gap-2 rounded-xl border px-3 py-2.5 text-start text-xs font-semibold transition", item.color,
+                <Button key={item.value} type="button" size="sm" variant="outline" onClick={() => assignCondition(item.value)}
+                  className={cn("justify-start rounded-xl text-start text-xs", item.color,
                     selectedConditions.length === 1 && selectedConditions[0] === item.value && "ring-2 ring-primary ring-offset-2")}>
                   <span className={cn("flex size-4 items-center justify-center rounded-full", item.dot)}>
                     {selectedConditions.length === 1 && selectedConditions[0] === item.value && <Check className="size-3 text-white" />}
                   </span>{item.value}
-                </button>
+                </Button>
               ))}
             </div>
           </details>

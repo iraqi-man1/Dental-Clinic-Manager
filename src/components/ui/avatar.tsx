@@ -1,12 +1,15 @@
 "use client";
-import * as AvatarPrimitive from "@radix-ui/react-avatar";
+import { Avatar as HeroAvatar } from "@heroui/react";
 import { cn } from "@/lib/utils";
 export function Avatar({
   className,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Root>) {
+}: React.ComponentProps<typeof HeroAvatar>) {
   return (
-    <AvatarPrimitive.Root
+    <HeroAvatar
+      size="md"
+      variant="soft"
+      color="accent"
       className={cn(
         "relative flex size-10 shrink-0 overflow-hidden rounded-full",
         className,
@@ -18,9 +21,9 @@ export function Avatar({
 export function AvatarImage({
   className,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+}: React.ComponentProps<typeof HeroAvatar.Image>) {
   return (
-    <AvatarPrimitive.Image
+    <HeroAvatar.Image
       className={cn("aspect-square size-full object-cover", className)}
       {...props}
     />
@@ -29,9 +32,9 @@ export function AvatarImage({
 export function AvatarFallback({
   className,
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
+}: React.ComponentProps<typeof HeroAvatar.Fallback>) {
   return (
-    <AvatarPrimitive.Fallback
+    <HeroAvatar.Fallback
       className={cn(
         "flex size-full items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary",
         className,

@@ -26,9 +26,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
 import type { Appointment, NavKey, Patient, Payment, TreatmentSession } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
+import { EmptyState, StatCard } from "@/components/clinic/app-ui";
 
 const statStyle = [
   {
@@ -141,52 +143,22 @@ export function DashboardPage({
   return (
     <div className="space-y-5">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card
-              key={stat.label}
-              className="group overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg"
-            >
-              <CardContent className="p-4 sm:p-5">
-                <div className="mb-4 flex items-start justify-between">
-                  <div
-                    className={cn(
-                      "grid size-10 place-items-center rounded-xl",
-                      stat.tint,
-                    )}
-                  >
-                    <Icon className="size-[18px]" />
-                  </div>
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold",
-                      stat.up
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-rose-50 text-rose-700",
-                    )}
-                  >
-                    {stat.up ? (
-                      <ArrowUpRight className="size-3" />
-                    ) : (
-                      <ArrowDownRight className="size-3" />
-                    )}
-                    {stat.trend}
-                  </span>
-                </div>
-                <p className="text-[11px] font-semibold uppercase tracking-[.08em] text-muted-foreground">
-                  {stat.label}
-                </p>
-                <p className="mt-1 text-2xl font-bold tracking-tight">
-                  {stat.amount !== undefined ? formatMoney(stat.amount) : stat.value}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {stat.note}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        {stats.map((stat, index) => (
+          <StatCard
+            key={stat.label}
+            label={stat.label}
+            value={stat.amount !== undefined ? formatMoney(stat.amount) : stat.value}
+            note={stat.note}
+            icon={stat.icon}
+            tone={(index === 2 ? "success" : index === 3 ? "warning" : index === 4 ? "danger" : index === 1 ? "info" : "accent")}
+            accessory={
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-1 text-[10px] font-bold text-success-soft-foreground">
+                {stat.up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                {stat.trend}
+              </span>
+            }
+          />
+        ))}
       </section>
       <section className="grid gap-5 xl:grid-cols-[1.55fr_1fr]">
         <Card>
@@ -197,10 +169,10 @@ export function DashboardPage({
                 Income compared with operating expenses
               </p>
             </div>
-            <select className="rounded-lg border bg-white px-3 py-2 text-xs font-medium outline-none">
+            <Select className="rounded-lg border bg-white px-3 py-2 text-xs font-medium outline-none">
               <option>Last 6 months</option>
               <option>This year</option>
-            </select>
+            </Select>
           </CardHeader>
           <CardContent>
             <div className="mb-4 flex items-end gap-6">
@@ -291,11 +263,12 @@ export function DashboardPage({
           </CardHeader>
           <CardContent className="space-y-2">
             {shown.map((appt) => (
-              <button
+              <Button
                 key={appt.id}
                 type="button"
+                variant="ghost"
                 onClick={() => onNavigate("appointments")}
-                className="flex w-full items-center gap-3 rounded-xl border border-transparent p-2.5 text-left transition hover:border-border hover:bg-slate-50"
+                className="h-auto w-full justify-start rounded-xl border border-transparent p-2.5 text-start hover:border-border"
               >
                 <div className="w-14 shrink-0">
                   <p className="text-xs font-bold text-slate-800">
@@ -326,8 +299,16 @@ export function DashboardPage({
                 >
                   {appt.status}
                 </Badge>
-              </button>
+              </Button>
             ))}
+            {!shown.length && (
+              <EmptyState
+                icon={CalendarCheck2}
+                title="No appointments today"
+                description="The day is clear. New bookings will appear here immediately."
+                className="min-h-44 border-0 bg-transparent p-5"
+              />
+            )}
           </CardContent>
         </Card>
       </section>
@@ -432,7 +413,14 @@ export function DashboardPage({
                 </div>
               );
             })}
-            {!recentActivity.length && <p className="py-6 text-center text-sm text-muted-foreground">No recent activity yet.</p>}
+            {!recentActivity.length && (
+              <EmptyState
+                icon={Activity}
+                title="No recent activity"
+                description="Payments and appointment updates will appear here."
+                className="min-h-44 border-0 bg-transparent p-5"
+              />
+            )}
           </CardContent>
         </Card>
       </section>

@@ -203,20 +203,23 @@ export default function LoginPage() {
                     type={show ? "text" : "password"}
                     minLength={8}
                     required
-                    className="pr-10"
+                    className="pe-10"
                     placeholder="At least 8 characters"
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setShow(!show)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    className="absolute end-1 top-1/2 size-8 -translate-y-1/2 text-muted-foreground"
+                    aria-label={show ? "Hide password" : "Show password"}
                   >
                     {show ? (
                       <EyeOff className="size-4" />
                     ) : (
                       <Eye className="size-4" />
                     )}
-                  </button>
+                  </Button>
                 </div>
               </label>}
               {message && (
@@ -229,23 +232,28 @@ export default function LoginPage() {
                 <ArrowRight />
               </Button>
             </form>
-            {mode === "login" && <button
+            {mode === "login" && <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => { setMode("reset"); setMessage(""); }}
-              className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"
-            >Forgot password?</button>}
+              className="mt-4 w-full text-center text-xs text-primary"
+            >Forgot password?</Button>}
             <div className="my-6 h-px bg-border" />
             <p className="text-center text-sm text-muted-foreground">
               {mode === "login" ? "New to BrightSmile?" : "Already have an account?"}{" "}
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setMode(mode === "login" ? "signup" : "login");
                   setMessage("");
                 }}
-                className="font-semibold text-primary hover:underline"
+                className="h-auto px-1 font-semibold text-primary"
               >
                 {mode === "login" ? "Create an account" : "Sign in"}
-              </button>
+              </Button>
             </p>
             {!configured && (
               <Button

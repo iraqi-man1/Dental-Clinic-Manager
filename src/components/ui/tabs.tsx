@@ -1,42 +1,87 @@
 "use client";
-import * as TabsPrimitive from "@radix-ui/react-tabs";
+
+import { Tabs as HeroTabs } from "@heroui/react";
 import { cn } from "@/lib/utils";
-export const Tabs = TabsPrimitive.Root;
+
+type TabsProps = Omit<
+  React.ComponentProps<typeof HeroTabs>,
+  "selectedKey" | "defaultSelectedKey" | "onSelectionChange" | "children"
+> & {
+  children: React.ReactNode;
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+};
+
+export function Tabs({
+  value,
+  defaultValue,
+  onValueChange,
+  className,
+  ...props
+}: TabsProps) {
+  return (
+    <HeroTabs
+      selectedKey={value}
+      defaultSelectedKey={defaultValue}
+      onSelectionChange={(key) => onValueChange?.(String(key))}
+      className={cn("gap-0", className)}
+      {...props}
+    />
+  );
+}
+
 export function TabsList({
   className,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.List>) {
+}: React.ComponentProps<typeof HeroTabs.List>) {
   return (
-    <TabsPrimitive.List
-      className={cn(
-        "inline-flex h-10 items-center rounded-lg border border-border bg-muted p-1",
-        className,
-      )}
-      {...props}
-    />
+    <HeroTabs.ListContainer className="w-fit max-w-full rounded-xl border border-border bg-default">
+      <HeroTabs.List
+        aria-label="Page sections"
+        className={cn("inline-flex h-10 items-center p-1", className)}
+        {...props}
+      />
+    </HeroTabs.ListContainer>
   );
 }
+
 export function TabsTrigger({
   className,
+  value,
+  children,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+}: Omit<React.ComponentProps<typeof HeroTabs.Tab>, "id" | "children"> & {
+  value: string;
+  children: React.ReactNode;
+}) {
   return (
-    <TabsPrimitive.Trigger
+    <HeroTabs.Tab
+      id={value}
       className={cn(
-        "inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-semibold text-muted-foreground transition data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_2px_rgba(15,23,42,.10)]",
+        "inline-flex h-8 items-center justify-center rounded-lg px-3 text-sm font-semibold text-muted-foreground transition data-[selected=true]:text-foreground",
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+      <HeroTabs.Indicator className="rounded-lg bg-white shadow-surface" />
+    </HeroTabs.Tab>
   );
 }
+
 export function TabsContent({
   className,
+  value,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof HeroTabs.Panel>, "id" | "children"> & {
+  value: string;
+  children: React.ReactNode;
+}) {
   return (
-    <TabsPrimitive.Content
-      className={cn("mt-4 outline-none", className)}
+    <HeroTabs.Panel
+      id={value}
+      className={cn("mt-4 p-0 outline-none", className)}
       {...props}
     />
   );

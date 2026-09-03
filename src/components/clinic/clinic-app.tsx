@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as Tooltip from "@radix-ui/react-tooltip";
+import { Tooltip } from "@heroui/react";
 import {
   Bell,
   Boxes,
@@ -58,6 +58,7 @@ import { StaffPage } from "./pages/staff-page";
 import { InventoryPage } from "./pages/inventory-page";
 import { ReportsPage } from "./pages/reports-page";
 import { SettingsPage } from "./pages/settings-page";
+import { PageHeader, PageSkeleton } from "./app-ui";
 import { subscribeToClinicChanges } from "@/lib/supabase/realtime";
 import {
   loadClinicData,
@@ -161,14 +162,14 @@ const allowedNavigation = (role: ClinicRole): NavKey[] => {
 function Brand({ expanded = true, clinicName }: { expanded?: boolean; clinicName: string }) {
   return (
     <div className={cn("flex items-center", expanded ? "gap-3" : "justify-center")}>
-      <div className="relative grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-white shadow-lg shadow-primary/20">
-        <span className="text-xl font-black">B</span>
-        <span className="absolute -right-1 -top-1 size-3 rounded-full border-2 border-white bg-accent" />
+      <div className="relative grid size-10 shrink-0 place-items-center rounded-[14px] bg-accent text-white shadow-[0_8px_20px_color-mix(in_oklab,var(--accent)_22%,transparent)]">
+        <span className="text-lg font-black tracking-[-0.08em]">BS</span>
+        <span className="absolute -end-1 -top-1 size-3 rounded-full border-2 border-white bg-success" />
       </div>
       <div className={cn("min-w-0", !expanded && "hidden")}>
         <p className="truncate font-bold tracking-tight text-slate-900" data-no-translate>{clinicName}</p>
-        <p className="text-[10px] font-semibold uppercase tracking-[.18em] text-muted-foreground">
-          Dental Studio
+        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-muted-foreground">
+          Clinic workspace
         </p>
       </div>
     </div>
@@ -208,11 +209,11 @@ function WorkstationSwitcher({ members, currentUserId, configured, onDemoSwitch 
     location.reload();
   };
   return <div className="relative block">
-    <button type="button" onClick={() => setMenuOpen((open) => !open)} className="flex items-center gap-2 rounded-xl p-1.5 pe-2 hover:bg-slate-100" aria-label="Switch workstation user">
+    <Button variant="ghost" onClick={() => setMenuOpen((open) => !open)} className="h-auto gap-2 rounded-xl p-1.5 pe-2" aria-label="Switch workstation user">
       <Avatar className="size-8"><AvatarFallback>{current?.fullName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2) || "CU"}</AvatarFallback></Avatar>
       <div className="text-start"><p className="max-w-28 truncate text-xs font-semibold" data-no-translate>{current?.fullName ?? "Clinic user"}</p><p className="text-[10px] capitalize text-muted-foreground">{current?.role.replace("_", " ") ?? "member"}</p></div><ChevronDown className="size-3.5 text-muted-foreground" />
-    </button>
-    {menuOpen && <div className="absolute end-0 top-12 z-50 w-72 rounded-2xl border bg-white p-2 shadow-xl"><p className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workstation user</p>{members.filter((member) => member.status === "active" && member.email && member.userId).map((member) => <button key={member.id} type="button" onClick={() => select(member)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start hover:bg-slate-50"><Avatar className="size-8"><AvatarFallback>{member.fullName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2)}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold" data-no-translate>{member.fullName}</span><span className="block text-[10px] capitalize text-muted-foreground">{member.role.replace("_", " ")}</span></span>{member.userId === currentUserId && <span className="text-[10px] font-bold text-emerald-700">Current</span>}</button>)}</div>}
+    </Button>
+    {menuOpen && <div className="absolute end-0 top-12 z-50 w-72 rounded-2xl border border-border bg-overlay p-2 shadow-overlay"><p className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workstation user</p>{members.filter((member) => member.status === "active" && member.email && member.userId).map((member) => <Button key={member.id} variant="ghost" onClick={() => select(member)} className="h-auto w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-start"><Avatar className="size-8"><AvatarFallback>{member.fullName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2)}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold" data-no-translate>{member.fullName}</span><span className="block text-[10px] capitalize text-muted-foreground">{member.role.replace("_", " ")}</span></span>{member.userId === currentUserId && <span className="text-[10px] font-bold text-success">Current</span>}</Button>)}</div>}
     <Dialog open={Boolean(target)} onOpenChange={(open) => !open && setTarget(null)}><DialogContent><DialogHeader><DialogTitle>Switch to {target?.fullName}</DialogTitle><DialogDescription>Enter this user’s password. Returning to Admin mode requires the Admin account password.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-4"><label className="block text-xs font-semibold">Password<Input name="password" type="password" minLength={configured ? 8 : 1} required className="mt-1.5" autoFocus /></label><DialogFooter><Button type="button" variant="outline" onClick={() => setTarget(null)}>Cancel</Button><Button disabled={saving}>{saving ? "Switching…" : "Switch user"}</Button></DialogFooter></form></DialogContent></Dialog>
   </div>;
 }
@@ -248,39 +249,38 @@ function SidebarContent({
   ) => {
     if (expanded || mobile) return child;
     return (
-    <Tooltip.Root key={tooltipKey}>
-      <Tooltip.Trigger asChild>{child}</Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content
-          side={language === "ar" ? "left" : "right"}
-          sideOffset={10}
-          className="z-[70] rounded-lg bg-slate-950 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg animate-in fade-in zoom-in-95"
-        >
-          {label}
-          <Tooltip.Arrow className="fill-slate-950" />
-        </Tooltip.Content>
-      </Tooltip.Portal>
+    <Tooltip.Root key={tooltipKey} delay={100} closeDelay={100}>
+      {child}
+      <Tooltip.Content
+        placement={language === "ar" ? "left" : "right"}
+        offset={10}
+        showArrow
+        className="z-[70] text-xs font-medium"
+      >
+        {label}
+      </Tooltip.Content>
     </Tooltip.Root>
     );
   };
 
   return (
-    <Tooltip.Provider delayDuration={100} skipDelayDuration={100}>
+    <>
       <div className={cn("py-5", expanded ? "px-5" : "px-3")}>
         <div className={cn("flex items-center", expanded ? "justify-between" : "flex-col gap-3")}>
           <Brand expanded={expanded} clinicName={clinic.name} />
           {!mobile && onTogglePin &&
             withTooltip(
               pinned ? "Unpin sidebar" : "Pin sidebar",
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={onTogglePin}
                 aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
                 aria-pressed={pinned}
-                className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-primary"
+                className="size-8 shrink-0 rounded-lg text-slate-400 hover:text-primary"
               >
                 {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-              </button>,
+              </Button>,
             )}
         </div>
       </div>
@@ -307,28 +307,28 @@ function SidebarContent({
                 const selected = active === item.key;
                 const count = notificationCounts[item.key] ?? 0;
                 return withTooltip(item.label,
-                  <button
-                    type="button"
+                  <Button
                     key={item.key}
+                    variant={selected ? "default" : "ghost"}
                     onClick={() => onNavigate(item.key)}
                     aria-label={!expanded ? item.label : undefined}
                     className={cn(
-                      "group flex w-full items-center rounded-xl py-2.5 text-sm font-medium transition-all",
+                      "group h-11 w-full items-center rounded-xl py-2.5 text-sm font-semibold transition-all",
                       expanded ? "gap-3 px-3" : "justify-center px-2",
                       selected
-                        ? "bg-primary text-white shadow-md shadow-primary/15"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+                        ? "text-white shadow-[0_8px_18px_color-mix(in_oklab,var(--accent)_18%,transparent)]"
+                        : "text-slate-600 hover:text-slate-950",
                     )}
                   >
                     <Icon className={cn("size-[18px] shrink-0", !selected && "text-slate-400 group-hover:text-primary")} />
-                    <span className={cn("flex-1 text-left", !expanded && "hidden")}>{item.label}</span>
+                    <span className={cn("flex-1 text-start", !expanded && "hidden")}>{item.label}</span>
                     {count > 0 && expanded ? (
                       <span className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-bold",
                         selected ? "bg-white/20 text-white" : item.key === "inventory" ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500",
                       )}>{count}</span>
                     ) : null}
-                  </button>,
+                  </Button>,
                   item.key,
                 );
               })}
@@ -338,19 +338,19 @@ function SidebarContent({
       </nav>
       {isAdministrator(role) && <div className="p-3">
         {withTooltip("Clinic settings",
-          <button
-            type="button"
+          <Button
+            variant={active === "settings" ? "default" : "ghost"}
             onClick={() => onNavigate("settings")}
             aria-label={!expanded ? "Clinic settings" : undefined}
             className={cn(
-              "flex w-full items-center rounded-xl py-2.5 text-sm font-medium transition",
+              "h-11 w-full items-center rounded-xl py-2.5 text-sm font-semibold transition",
               expanded ? "gap-3 px-3" : "justify-center px-2",
-              active === "settings" ? "bg-primary text-white" : "text-slate-600 hover:bg-slate-100",
+              active === "settings" ? "text-white" : "text-slate-600",
             )}
           >
             <Settings className="size-[18px] shrink-0" />
             <span className={cn(!expanded && "hidden")}>Clinic settings</span>
-          </button>,
+          </Button>,
         )}
       </div>}
       <div className={cn("border-t", expanded ? "p-4" : "p-3")}>
@@ -363,7 +363,7 @@ function SidebarContent({
           {expanded && <ChevronDown className="size-4 text-muted-foreground" />}
         </div>
       </div>
-    </Tooltip.Provider>
+    </>
   );
 }
 
@@ -389,6 +389,7 @@ export function ClinicApp() {
   const [sidebarPinned, setSidebarPinned] = useState(true);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const [sidebarPreferenceReady, setSidebarPreferenceReady] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(configured);
   const sidebarHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -404,19 +405,21 @@ export function ClinicApp() {
   }, []);
 
   useEffect(() => {
-    void loadClinicData().then((data) => {
-      if (!data) return;
-      setPatientList(data.patients);
-      setAppointmentList(data.appointments);
-      setPaymentList(data.payments);
-      setInventoryList(data.inventory);
-      setProcedureList(data.procedures);
-      setMemberList(data.members);
-      setCurrentUserId(data.currentUserId);
-      setSessionList(data.sessions);
-      setClinicRole(data.role);
-      setClinicInfo(data.clinic);
-    });
+    void loadClinicData()
+      .then((data) => {
+        if (!data) return;
+        setPatientList(data.patients);
+        setAppointmentList(data.appointments);
+        setPaymentList(data.payments);
+        setInventoryList(data.inventory);
+        setProcedureList(data.procedures);
+        setMemberList(data.members);
+        setCurrentUserId(data.currentUserId);
+        setSessionList(data.sessions);
+        setClinicRole(data.role);
+        setClinicInfo(data.clinic);
+      })
+      .finally(() => setInitialLoading(false));
     return subscribeToClinicChanges(() => {
       void loadClinicData().then((data) => {
         if (!data) return;
@@ -627,7 +630,7 @@ export function ClinicApp() {
   ];
 
   return (
-    <div className="clinic-shell min-h-screen bg-[#f3f5f6] text-slate-950">
+    <div className="clinic-shell min-h-screen bg-background text-foreground">
       <Toaster position="top-right" richColors closeButton />
       <aside
         data-sidebar-state={sidebarExpanded ? "expanded" : "collapsed"}
@@ -635,7 +638,7 @@ export function ClinicApp() {
         onMouseEnter={expandSidebarOnHover}
         onMouseLeave={collapseSidebarAfterHover}
         className={cn(
-          "desktop-sidebar fixed inset-y-0 start-0 z-30 flex-col border-e bg-white",
+          "desktop-sidebar fixed inset-y-0 start-0 z-30 flex-col border-e border-border bg-surface",
           sidebarPreferenceReady
             ? "opacity-100 transition-[width,box-shadow,opacity] duration-300 ease-out"
             : "opacity-0",
@@ -662,14 +665,16 @@ export function ClinicApp() {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
           />
-          <aside className="mobile-sidebar absolute inset-y-0 start-0 flex w-[280px] max-w-[85vw] flex-col bg-white shadow-2xl">
-            <button
+          <aside className="mobile-sidebar absolute inset-y-0 start-0 flex w-[280px] max-w-[85vw] flex-col border-e border-border bg-surface shadow-overlay">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setMobileOpen(false)}
-              className="mobile-nav-close absolute end-3 top-3 rounded-lg p-2 hover:bg-slate-100"
+              className="mobile-nav-close absolute end-3 top-3 rounded-lg"
               aria-label="Close navigation"
             >
               <X className="size-5" />
-            </button>
+            </Button>
             <SidebarContent active={displayActive} onNavigate={navigate} mobile role={clinicRole} member={currentMember} clinic={clinicInfo} notificationCounts={notificationCounts} />
           </aside>
         </div>
@@ -681,7 +686,7 @@ export function ClinicApp() {
           sidebarPinned ? "desktop-sidebar-offset-expanded" : "desktop-sidebar-offset-collapsed",
         )}
       >
-        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border/80 bg-surface/92 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="icon"
@@ -692,23 +697,24 @@ export function ClinicApp() {
             <Menu />
           </Button>
           <div className="relative hidden w-full max-w-md md:block">
-            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-transparent bg-slate-100/80 pl-10 focus:bg-white"
+              className="border-transparent bg-surface-secondary/80 ps-10 focus:bg-white"
               placeholder="Search patients, invoices, appointments…"
             />
             {matchingPatients.length > 0 && (
-              <div className="absolute left-0 right-0 top-12 z-50 rounded-2xl border bg-white p-2 shadow-xl">
+              <div className="absolute inset-x-0 top-12 z-50 rounded-2xl border border-border bg-overlay p-2 shadow-overlay">
                 {matchingPatients.map((patient) => (
-                  <button
+                  <Button
                     key={patient.id}
+                    variant="ghost"
                     onClick={() => {
                       navigate("patients");
                       setSearch(patient.name);
                     }}
-                    className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-slate-50"
+                    className="h-auto w-full justify-start gap-3 rounded-xl p-2.5 text-start"
                   >
                     <Avatar className="size-8">
                       <AvatarFallback className={patient.avatarColor}>
@@ -721,7 +727,7 @@ export function ClinicApp() {
                         {patient.patientNo} · {patient.phone}
                       </p>
                     </div>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
@@ -736,13 +742,15 @@ export function ClinicApp() {
                 className="relative"
               >
                 <Bell />
-                {notifications.length > 0 && <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-rose-500" />}
+                {notifications.length > 0 && <span className="absolute end-2 top-2 size-2 rounded-full border-2 border-white bg-rose-500" />}
               </Button>
               {notificationsOpen && (
-                <div className="absolute right-0 top-12 w-[min(340px,calc(100vw-2rem))] rounded-2xl border bg-white p-2 shadow-xl">
+                <div className="absolute end-0 top-12 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-border bg-overlay p-2 shadow-overlay">
                   <div className="flex items-center justify-between px-3 py-2">
                     <p className="font-semibold">Notifications</p>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       className="text-xs font-semibold text-primary"
                       onClick={() => {
                         setNotificationsOpen(false);
@@ -750,7 +758,7 @@ export function ClinicApp() {
                       }}
                     >
                       Mark all read
-                    </button>
+                    </Button>
                   </div>
                   {notifications.map((n) => (
                     <div
@@ -783,22 +791,17 @@ export function ClinicApp() {
           </div>
         </header>
         <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <h1 className="text-2xl font-bold tracking-[-.03em] sm:text-[28px]">
-                {pageMeta[displayActive].title}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {displayActive === "dashboard" ? `Here’s what’s happening at ${clinicInfo.name} today.` : pageMeta[displayActive].description}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
-                <span className="size-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,.12)]" />
+          <PageHeader
+            title={pageMeta[displayActive].title}
+            description={displayActive === "dashboard" ? `Here’s what’s happening at ${clinicInfo.name} today.` : pageMeta[displayActive].description}
+            status={
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-card">
+                <span className="size-2 rounded-full bg-success shadow-[0_0_0_4px_color-mix(in_oklab,var(--success)_14%,transparent)]" />
                 Live workspace
               </span>
-            </div>
-          </div>
+            }
+          />
+          {initialLoading ? <PageSkeleton /> : <>
           {displayActive === "dashboard" && (
             <DashboardPage
               appointments={appointmentList}
@@ -850,6 +853,7 @@ export function ClinicApp() {
           )}
           {displayActive === "reports" && <ReportsPage payments={paymentList} patients={patientList} appointments={appointmentList} />}
           {displayActive === "settings" && <SettingsPage clinic={clinicInfo} onSaveClinic={saveClinicProfile} />}
+          </>}
         </main>
       </div>
     </div>

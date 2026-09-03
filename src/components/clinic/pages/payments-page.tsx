@@ -14,7 +14,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -24,9 +24,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
 import type { ClinicRole, Payment, PaymentReceipt } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import {
+  DataTable,
+  EmptyState,
+  FilterBar,
+  StatCard,
+  type DataTableColumn,
+} from "@/components/clinic/app-ui";
 
 const statusVariant = (s: Payment["status"]) =>
   s === "Paid" ? "success" : s === "Overdue" || s === "Unpaid" ? "danger" : "warning";
@@ -73,7 +80,7 @@ function PaymentDialog({
         <form onSubmit={submit} className="space-y-4">
           <label className="block text-xs font-semibold">
             Patient · appointment treatment
-            <select
+            <Select
               name="invoiceId"
               value={invoiceId || outstanding[0]?.id || ""}
               onChange={(event) => setInvoiceId(event.target.value)}
@@ -83,7 +90,7 @@ function PaymentDialog({
               {outstanding.map((payment) => (
                 <option key={payment.id} value={payment.id} data-no-translate>{payment.patientName} · {payment.treatment} · {formatMoney(payment.total - payment.paid - payment.discount)}</option>
               ))}
-            </select>
+            </Select>
           </label>
           {selected && <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center text-xs"><div><p className="text-muted-foreground">Original price</p><p className="mt-1 font-bold">{formatMoney(selected.originalPrice)}</p></div><div><p className="text-muted-foreground">Paid</p><p className="mt-1 font-bold text-emerald-700">{formatMoney(selected.paid)}</p></div><div><p className="text-muted-foreground">Remaining</p><p className="mt-1 font-bold text-amber-700">{formatMoney(selected.total - selected.paid - selected.discount)}</p></div></div>}
           <div className="grid grid-cols-2 gap-3">
@@ -106,7 +113,7 @@ function PaymentDialog({
             </label>
             <label className="text-xs font-semibold">
               Method
-              <select
+              <Select
                 name="method"
                 className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"
               >
@@ -114,7 +121,7 @@ function PaymentDialog({
                 <option>Cash</option>
                 <option>Insurance</option>
                 <option>Bank transfer</option>
-              </select>
+              </Select>
             </label>
           </div>
           <DialogFooter>
@@ -253,6 +260,30 @@ export function PaymentsPage({
       (s, p) => s + Math.max(0, p.total - p.paid - p.discount),
       0,
     );
+  const columns: DataTableColumn<Payment>[] = [
+    { key: "invoice", label: "Invoice", isRowHeader: true, render: (payment) => <span className="text-xs font-bold text-primary">{payment.invoice}</span> },
+    { key: "patient", label: "Patient", render: (payment) => <span className="min-w-36 text-sm font-semibold" data-no-translate>{payment.patientName}</span> },
+    {
+      key: "treatment",
+      label: "Treatment",
+      render: (payment) => <div className="min-w-44" data-no-translate><p className="text-xs font-semibold">{payment.treatment}</p><p className="text-[10px] text-muted-foreground">Original: {formatMoney(payment.originalPrice)}</p></div>,
+    },
+    { key: "date", label: "Date", render: (payment) => <span className="text-xs text-muted-foreground">{payment.date}</span> },
+    { key: "total", label: "Total", render: (payment) => <span className="text-sm font-semibold">{formatMoney(payment.total)}</span> },
+    { key: "paid", label: "Paid", render: (payment) => <span className="text-sm font-semibold text-success">{formatMoney(payment.paid)}</span> },
+    { key: "remaining", label: "Remaining", render: (payment) => <span className="text-sm font-semibold">{formatMoney(Math.max(0, payment.total - payment.paid - payment.discount))}</span> },
+    { key: "method", label: "Method", render: (payment) => <span className="text-xs">{payment.method}</span> },
+    { key: "status", label: "Status", render: (payment) => <Badge variant={statusVariant(payment.status)}>{payment.status}</Badge> },
+    {
+      key: "actions",
+      label: <span className="sr-only">Receipts</span>,
+      render: (payment) => payment.receipts?.length ? (
+        <div className="flex flex-wrap justify-end gap-1">
+          {payment.receipts.map((transaction, index) => <Button key={transaction.id} variant="ghost" size="icon" onClick={() => setReceipt({ payment, transaction })} title={`${transaction.receiptNumber} · payment ${index + 1}`}><Printer /></Button>)}
+        </div>
+      ) : payment.paid > 0 ? <Button variant="ghost" size="icon" onClick={() => setReceipt({ payment })} title="View receipt"><Printer /></Button> : null,
+    },
+  ];
   return (
     <div className="space-y-5">
       {canViewAnalytics && <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -285,41 +316,29 @@ export function PaymentsPage({
             icon: CreditCard,
             color: "bg-violet-50 text-violet-700",
           },
-        ].map((s) => {
-          const Icon = s.icon;
-          return (
-            <Card key={s.label}>
-              <CardContent className="p-5">
-                <div
-                  className={cn(
-                    "mb-4 grid size-10 place-items-center rounded-xl",
-                    s.color,
-                  )}
-                >
-                  <Icon className="size-5" />
-                </div>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-                <p className="mt-1 text-2xl font-bold">{s.value}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {s.detail}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        ].map((s, index) => (
+          <StatCard
+            key={s.label}
+            label={s.label}
+            value={s.value}
+            note={s.detail}
+            icon={s.icon}
+            tone={index === 0 ? "success" : index === 1 ? "warning" : index === 2 ? "info" : "accent"}
+          />
+        ))}
       </div>}
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+      <FilterBar className="justify-between">
         <div className="flex flex-1 gap-2">
           <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-white pl-9"
+              className="bg-white ps-9"
               placeholder="Search invoices or patients…"
             />
           </div>
-          <select
+          <Select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="rounded-xl border bg-white px-3 text-sm"
@@ -329,7 +348,7 @@ export function PaymentsPage({
             <option>Partial</option>
             <option>Unpaid</option>
             <option>Overdue</option>
-          </select>
+          </Select>
         </div>
         <div className="flex gap-2">
           {canViewAnalytics && <Button
@@ -341,73 +360,9 @@ export function PaymentsPage({
           </Button>}
           <PaymentDialog payments={payments} onAdd={onAdd} />
         </div>
-      </div>
+      </FilterBar>
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left">
-            <thead>
-              <tr className="border-b bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                <th className="px-5 py-3.5">Invoice</th>
-                <th className="px-4 py-3.5">Patient</th>
-                <th className="px-4 py-3.5">Treatment</th>
-                <th className="px-4 py-3.5">Date</th>
-                <th className="px-4 py-3.5">Total</th>
-                <th className="px-4 py-3.5">Paid</th>
-                <th className="px-4 py-3.5">Remaining</th>
-                <th className="px-4 py-3.5">Method</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((p) => {
-                const remaining = Math.max(0, p.total - p.paid - p.discount);
-                return (
-                  <tr
-                    key={p.id}
-                    className="border-b last:border-0 hover:bg-slate-50"
-                  >
-                    <td className="px-5 py-4 text-xs font-bold text-primary">
-                      {p.invoice}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold" data-no-translate>
-                      {p.patientName}
-                    </td>
-                    <td className="px-4 py-4 text-xs" data-no-translate><p className="font-semibold">{p.treatment}</p><p className="text-[10px] text-muted-foreground">Original: {formatMoney(p.originalPrice)}</p></td>
-                    <td className="px-4 py-4 text-xs text-muted-foreground">
-                      {p.date}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold">
-                      {formatMoney(p.total)}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold text-emerald-600">
-                      {formatMoney(p.paid)}
-                    </td>
-                    <td className="px-4 py-4 text-sm font-semibold">
-                      {formatMoney(remaining)}
-                    </td>
-                    <td className="px-4 py-4 text-xs">{p.method}</td>
-                    <td className="px-4 py-4">
-                      <Badge variant={statusVariant(p.status)}>
-                        {p.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-4">
-                      {p.receipts?.length ? <div className="flex flex-wrap justify-end gap-1">{p.receipts.map((transaction, index) => <Button key={transaction.id} variant="ghost" size="icon" onClick={() => setReceipt({ payment: p, transaction })} title={`${transaction.receiptNumber} · payment ${index + 1}`}><Printer /></Button>)}</div> : p.paid > 0 && <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setReceipt({ payment: p })}
-                        title="View receipt"
-                      >
-                        <Printer />
-                      </Button>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {visible.length ? <DataTable ariaLabel="Payments and invoices" columns={columns} rows={visible} getRowKey={(payment) => payment.id} contentClassName="min-w-[900px]" /> : <EmptyState icon={ReceiptText} title="No payments found" description="Try a different patient, invoice, or status filter." className="m-5" />}
       </Card>
       <Receipt
         receipt={receipt}

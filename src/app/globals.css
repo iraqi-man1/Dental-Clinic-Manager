@@ -1,40 +1,61 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 @import "tw-animate-css";
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--surface-foreground);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-foreground);
+  --color-secondary: var(--default);
+  --color-secondary-foreground: var(--default-foreground);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
   --color-border: var(--border);
-  --color-input: var(--input);
-  --color-destructive: var(--destructive);
+  --color-input: var(--field-border);
+  --color-destructive: var(--danger);
   --shadow-card:
-    0 1px 2px rgba(15, 23, 42, 0.045), 0 5px 16px rgba(15, 23, 42, 0.035);
+    0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #13201f;
-  --card: #ffffff;
-  --card-foreground: #13201f;
-  --primary: #0f9f8f;
-  --primary-foreground: #ffffff;
-  --secondary: #eef4f3;
-  --secondary-foreground: #1d403c;
-  --muted: #f1f4f5;
-  --muted-foreground: #647371;
-  --accent: #84d5cb;
-  --border: #dbe2e3;
-  --input: #cfd9da;
-  --destructive: #e44e69;
+  color-scheme: light;
+  --background: oklch(0.976 0.004 180);
+  --foreground: oklch(0.235 0.022 178);
+  --surface: oklch(1 0 0);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: oklch(0.958 0.008 178);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary: oklch(0.936 0.011 178);
+  --overlay: oklch(1 0 0);
+  --overlay-foreground: var(--foreground);
+  --muted: oklch(0.56 0.018 178);
+  --muted-foreground: var(--muted);
+  --default: oklch(0.945 0.009 178);
+  --default-foreground: oklch(0.31 0.027 178);
+  --accent: oklch(0.61 0.105 177);
+  --accent-foreground: oklch(0.99 0.004 178);
+  --success: oklch(0.67 0.15 151);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.78 0.15 73);
+  --warning-foreground: oklch(0.28 0.05 73);
+  --danger: oklch(0.63 0.21 24);
+  --danger-foreground: oklch(0.99 0 0);
+  --border: oklch(0.895 0.011 178);
+  --field-background: oklch(1 0 0);
+  --field-foreground: var(--foreground);
+  --field-placeholder: oklch(0.62 0.013 178);
+  --field-border: oklch(0.855 0.015 178);
+  --field-border-width: 1px;
+  --focus: var(--accent);
+  --radius: 0.625rem;
+  --field-radius: 0.75rem;
+  --surface-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --overlay-shadow:
+    0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.05);
+  --field-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
 }
 
 * {
@@ -45,7 +66,7 @@ html {
 }
 body {
   margin: 0;
-  background: #f3f5f6;
+  background: var(--background);
   color: var(--foreground);
   font-family:
     Inter,
@@ -57,6 +78,7 @@ body {
     sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 html[dir="rtl"] body {
@@ -177,36 +199,114 @@ select {
   cursor: pointer;
 }
 
-.clinic-shell .rounded-2xl {
-  border-radius: 0.75rem;
-}
-
-.clinic-shell .rounded-xl {
-  border-radius: 0.625rem;
-}
-
 .clinic-shell select {
-  border-color: var(--input);
-  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.025);
+  min-height: 2.5rem;
+  border-color: var(--field-border);
+  border-radius: var(--field-radius);
+  background-color: var(--field-background);
+  color: var(--field-foreground);
+  box-shadow: var(--field-shadow);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.clinic-shell select:hover {
+  border-color: var(--field-border-hover);
+  background-color: var(--field-hover);
+}
+
+.clinic-shell select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+}
+
+.clinic-shell table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.clinic-shell table thead {
+  color: var(--muted);
+  background: color-mix(in oklab, var(--surface-secondary) 70%, white);
+}
+
+.clinic-shell table th {
+  min-height: 2.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.clinic-shell table tbody tr {
+  transition: background-color 140ms ease;
+}
+
+.clinic-shell table tbody tr:hover {
+  background: color-mix(in oklab, var(--accent) 3.5%, white);
+}
+
+.clinic-shell table td {
+  border-color: var(--separator);
+  vertical-align: middle;
+}
+
+.clinic-shell label {
+  color: var(--foreground);
+  line-height: 1.35;
+}
+
+.clinic-shell textarea {
+  border-color: var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-background);
+  box-shadow: var(--field-shadow);
   outline: none;
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
-.clinic-shell select:hover {
-  border-color: #94a3b8;
+.clinic-shell textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
 }
 
-.clinic-shell select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(15, 159, 143, 0.12);
+.clinic-shell :is(button, input, select, textarea, [role="button"]):focus-visible {
+  outline: none;
 }
 
-.clinic-shell table thead {
-  color: #52615f;
+.clinic-shell .lucide {
+  stroke-width: 1.8;
 }
 
-.clinic-shell table tbody tr {
-  transition: background-color 120ms ease;
+.modal__dialog > form,
+.modal__dialog > .dialog-body {
+  margin-top: 1.25rem;
+}
+
+.modal__dialog > form > .modal__footer,
+.modal__dialog > .modal__footer {
+  margin-top: 1.5rem;
+}
+
+.modal__heading {
+  padding-inline-end: 2rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+}
+
+.modal__dialog,
+.card {
+  border: 1px solid var(--border);
+}
+
+.input {
+  min-height: 2.5rem;
+}
+
+.button,
+.chip {
+  font-weight: 650;
 }
 ::selection {
   background: rgba(15, 159, 143, 0.2);

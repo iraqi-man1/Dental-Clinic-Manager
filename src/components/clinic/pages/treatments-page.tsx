@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
 import { DentalChart } from "@/components/clinic/dental-chart";
 import { treatmentPlans as demoPlans } from "@/lib/demo-data";
 import type {
@@ -53,6 +54,13 @@ import {
   updateTreatmentPlan,
 } from "@/lib/supabase/clinic-data";
 import { hasSupabaseConfig } from "@/lib/supabase/client";
+import {
+  DataTable,
+  EmptyState,
+  FilterBar,
+  StatCard,
+  type DataTableColumn,
+} from "@/components/clinic/app-ui";
 
 const fallbackCatalog: ProcedureCatalogItem[] = [
   ["Filling", "Restorative", 180, 1, true, false],
@@ -99,45 +107,28 @@ function PlanItems({ plan, onEdit, onRecord, canEdit, canComplete }: {
   canComplete: boolean;
 }) {
   const { formatMoney } = useClinicPreferences();
+  const columns: DataTableColumn<TreatmentPlanItem>[] = [
+    { key: "procedure", label: "Procedure", isRowHeader: true, render: (item) => <span className="min-w-40 font-semibold" data-no-translate>{item.procedureName}</span> },
+    { key: "teeth", label: "Teeth", render: (item) => <span data-no-translate>{item.toothNumbers.length ? `#${item.toothNumbers.join(", #")}` : "—"}</span> },
+    { key: "surfaces", label: "Surfaces", render: (item) => surfacesLabel(item.surfaces) },
+    { key: "status", label: "Status", render: (item) => <Badge variant={item.status === "completed" ? "success" : item.status === "scheduled" ? "default" : "secondary"}>{statusLabel(item.status)}</Badge> },
+    { key: "sessions", label: "Sessions", render: (item) => <span className="font-medium">{item.sessionsDone}/{item.sessionsTotal}</span> },
+    { key: "price", label: "Price", render: (item) => <span className="font-medium">{formatMoney(item.price)}</span> },
+    { key: "discount", label: "Discount", render: (item) => formatMoney(item.discount) },
+    { key: "finalPrice", label: "Final price", render: (item) => <span className="font-semibold">{formatMoney(item.finalPrice)}</span> },
+    { key: "paid", label: "Paid", render: (item) => <span className="text-success">{formatMoney(item.amountPaid)}</span> },
+    { key: "remaining", label: "Remaining", render: (item) => <span className="font-semibold text-warning">{formatMoney(item.remaining)}</span> },
+    {
+      key: "actions",
+      label: <span className="sr-only">Treatment actions</span>,
+      render: (item) => <div className="flex min-w-40 gap-1">{canEdit ? <Button size="icon" variant="ghost" aria-label="Edit treatment item" onClick={() => onEdit(item)}><Pencil /></Button> : null}{canComplete && item.status !== "completed" && item.status !== "cancelled" ? <Button size="sm" variant="outline" onClick={() => onRecord(item)}><CheckCircle2 /> Record session</Button> : null}</div>,
+    },
+  ];
   if (!plan.items?.length) return (
-    <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-      Select teeth on the odontogram and add the first procedure.
-    </div>
+    <EmptyState icon={ClipboardPlus} title="No procedures in this plan" description="Select teeth on the odontogram and add the first procedure." />
   );
   return (
-    <div className="overflow-x-auto rounded-2xl border">
-      <table className="w-full min-w-[980px] text-sm">
-        <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-muted-foreground">
-          <tr>
-            {['Procedure','Teeth','Surfaces','Status','Sessions','Price','Discount','Final price','Paid','Remaining',''].map((heading) =>
-              <th key={heading} className="px-3 py-3 text-start font-semibold">{heading}</th>)}
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {plan.items.map((item) => (
-            <tr key={item.id} className="bg-white">
-              <td className="px-3 py-3 font-semibold">{item.procedureName}</td>
-              <td className="px-3 py-3" data-no-translate>{item.toothNumbers.length ? `#${item.toothNumbers.join(', #')}` : '—'}</td>
-              <td className="px-3 py-3">{surfacesLabel(item.surfaces)}</td>
-              <td className="px-3 py-3"><Badge variant={item.status === 'completed' ? 'success' : item.status === 'scheduled' ? 'default' : 'secondary'}>{statusLabel(item.status)}</Badge></td>
-              <td className="px-3 py-3 font-medium">{item.sessionsDone}/{item.sessionsTotal}</td>
-              <td className="px-3 py-3 font-medium">{formatMoney(item.price)}</td>
-              <td className="px-3 py-3">{formatMoney(item.discount)}</td>
-              <td className="px-3 py-3 font-semibold">{formatMoney(item.finalPrice)}</td>
-              <td className="px-3 py-3 text-emerald-700">{formatMoney(item.amountPaid)}</td>
-              <td className="px-3 py-3 font-semibold text-amber-700">{formatMoney(item.remaining)}</td>
-              <td className="px-3 py-3">
-                <div className="flex gap-1">
-                  {canEdit && <Button size="icon" variant="ghost" aria-label="Edit treatment item" onClick={() => onEdit(item)}><Pencil /></Button>}
-                  {canComplete && item.status !== 'completed' && item.status !== 'cancelled' &&
-                    <Button size="sm" variant="outline" onClick={() => onRecord(item)}><CheckCircle2 /> Record session</Button>}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable ariaLabel="Treatment plan items" columns={columns} rows={plan.items} getRowKey={(item) => item.id} contentClassName="min-w-[980px]" />
   );
 }
 
@@ -366,25 +357,25 @@ export function TreatmentsPage({ patients, role, patientId, embedded = false }: 
           <CardContent>
             <form onSubmit={saveItem} className="grid gap-4 lg:grid-cols-4">
               <label className="text-xs font-semibold lg:col-span-2">Procedure
-                <select value={procedureId} onChange={(event) => chooseProcedure(event.target.value)} required className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
+                <Select value={procedureId} onChange={(event) => chooseProcedure(event.target.value)} required className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
                   <option value="">Choose procedure…</option>
                   {[...new Set(catalog.map((item) => item.category))].map((category) =>
                     <optgroup key={category} label={category}>{catalog.filter((item) => item.category === category).map((item) =>
                       <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>)}
                   <option value="__custom__">Custom procedure…</option>
-                </select>
+                </Select>
               </label>
               {procedureId === "__custom__" && <label className="text-xs font-semibold lg:col-span-2">Custom procedure name<Input value={customProcedure} onChange={(event) => setCustomProcedure(event.target.value)} required className="mt-1.5" /></label>}
               <label className="text-xs font-semibold">Clinical chart state
-                <select value={chartState} onChange={(event) => setChartState(event.target.value as DentalChartState)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
+                <Select value={chartState} onChange={(event) => setChartState(event.target.value as DentalChartState)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
                   <option value="decay">Decay / caries</option><option value="existing_restoration">Existing restoration</option>
                   <option value="planned">Planned treatment</option><option value="completed">Completed treatment</option><option value="other">Other finding</option>
-                </select>
+                </Select>
               </label>
               <label className="text-xs font-semibold">Treatment status
-                <select value={itemStatus} onChange={(event) => setItemStatus(event.target.value as TreatmentItemStatus)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
+                <Select value={itemStatus} onChange={(event) => setItemStatus(event.target.value as TreatmentItemStatus)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
                   <option value="planned">Planned</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-                </select>
+                </Select>
               </label>
               <label className="text-xs font-semibold">Price<Input type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(Number(event.target.value))} className="mt-1.5" /></label>
               <label className="text-xs font-semibold">Discount<Input type="number" min="0" max={price} step="0.01" value={discount} onChange={(event) => setDiscount(Number(event.target.value))} className="mt-1.5" /></label>
@@ -411,14 +402,14 @@ export function TreatmentsPage({ patients, role, patientId, embedded = false }: 
           <DialogContent><DialogHeader><DialogTitle>Complete clinical session</DialogTitle><DialogDescription>Clinical completion and payment are separate. Any amount already collected by reception is shown below.</DialogDescription></DialogHeader>
             {completion && <div className="space-y-4">
               <div className="rounded-2xl border bg-slate-50 p-4"><p className="font-semibold" data-no-translate>{completion.item.procedureName} · Session {completion.session.sessionNumber}</p><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><div><p className="text-muted-foreground">Expected</p><p className="font-bold">{formatMoney(completion.session.expectedAmount)}</p></div><div><p className="text-muted-foreground">Already paid</p><p className="font-bold text-emerald-700">{formatMoney(completion.session.amountPaid)}</p></div><div><p className="text-muted-foreground">Remaining</p><p className="font-bold text-amber-700">{formatMoney(completion.session.remaining)}</p></div></div></div>
-              {completion.session.remaining > 0 ? <><label className="block text-xs font-semibold">Payment during completion<select value={completionPaymentMode} onChange={(event) => setCompletionPaymentMode(event.target.value as typeof completionPaymentMode)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option value="none">Do not collect now</option><option value="full">Collect remaining in full</option><option value="partial">Collect partial amount</option></select></label>
+              {completion.session.remaining > 0 ? <><label className="block text-xs font-semibold">Payment during completion<Select value={completionPaymentMode} onChange={(event) => setCompletionPaymentMode(event.target.value as typeof completionPaymentMode)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option value="none">Do not collect now</option><option value="full">Collect remaining in full</option><option value="partial">Collect partial amount</option></Select></label>
                 {completionPaymentMode === "partial" && <label className="block text-xs font-semibold">Amount<Input type="number" min="0.01" max={completion.session.remaining} step="0.01" value={completionAmount || ""} onChange={(event) => setCompletionAmount(Number(event.target.value))} className="mt-1.5" /></label>}
-                {completionPaymentMode !== "none" && <label className="block text-xs font-semibold">Method<select value={completionMethod} onChange={(event) => setCompletionMethod(event.target.value as Payment["method"])} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Cash</option><option>Card</option><option>Insurance</option><option>Bank transfer</option></select></label>}</> : <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">This session is fully paid. No duplicate payment will be requested.</div>}
+                {completionPaymentMode !== "none" && <label className="block text-xs font-semibold">Method<Select value={completionMethod} onChange={(event) => setCompletionMethod(event.target.value as Payment["method"])} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Cash</option><option>Card</option><option>Insurance</option><option>Bank transfer</option></Select></label>}</> : <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">This session is fully paid. No duplicate payment will be requested.</div>}
             </div>}
             <DialogFooter><Button variant="outline" onClick={() => setCompletion(null)}>Cancel</Button><Button onClick={confirmCompletion} disabled={completionPaymentMode === "partial" && (completionAmount <= 0 || completionAmount > (completion?.session.remaining ?? 0))}><CheckCircle2 /> Complete session</Button></DialogFooter>
           </DialogContent>
         </Dialog>
-        <Dialog open={planEditOpen} onOpenChange={setPlanEditOpen}><DialogContent><DialogHeader><DialogTitle>Edit treatment plan</DialogTitle><DialogDescription>Update the plan title or workflow status from this patient profile.</DialogDescription></DialogHeader><form onSubmit={savePlanDetails} className="space-y-4"><label className="block text-xs font-semibold">Plan title<Input name="title" defaultValue={workspacePlan.title} required className="mt-1.5" /></label><label className="block text-xs font-semibold">Plan status<select name="status" defaultValue={workspacePlan.status} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Proposed</option><option>In progress</option><option>On hold</option><option>Completed</option></select></label><DialogFooter><Button type="button" variant="outline" onClick={() => setPlanEditOpen(false)}>Cancel</Button><Button>Save plan</Button></DialogFooter></form></DialogContent></Dialog>
+        <Dialog open={planEditOpen} onOpenChange={setPlanEditOpen}><DialogContent><DialogHeader><DialogTitle>Edit treatment plan</DialogTitle><DialogDescription>Update the plan title or workflow status from this patient profile.</DialogDescription></DialogHeader><form onSubmit={savePlanDetails} className="space-y-4"><label className="block text-xs font-semibold">Plan title<Input name="title" defaultValue={workspacePlan.title} required className="mt-1.5" /></label><label className="block text-xs font-semibold">Plan status<Select name="status" defaultValue={workspacePlan.status} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Proposed</option><option>In progress</option><option>On hold</option><option>Completed</option></Select></label><DialogFooter><Button type="button" variant="outline" onClick={() => setPlanEditOpen(false)}>Cancel</Button><Button>Save plan</Button></DialogFooter></form></DialogContent></Dialog>
       </div>
     );
   }
@@ -442,16 +433,13 @@ export function TreatmentsPage({ patients, role, patientId, embedded = false }: 
           { label: "Active plans", value: stats.active, sub: stats.activeValue, icon: Stethoscope, color: "bg-primary/10 text-primary" },
           { label: "Proposed value", value: stats.proposed, sub: stats.proposedValue, icon: ClipboardPlus, color: "bg-blue-50 text-blue-700" },
           { label: "Completed", value: stats.completed, sub: stats.completedValue, icon: CheckCircle2, color: "bg-emerald-50 text-emerald-700" },
-        ].map((stat) => { const Icon = stat.icon; return <Card key={stat.label}><CardContent className="flex items-center gap-4 p-5">
-          <div className={cn("grid size-11 place-items-center rounded-xl", stat.color)}><Icon className="size-5" /></div>
-          <div><p className="text-xs text-muted-foreground">{stat.label}</p><div className="mt-1 flex items-baseline gap-2"><span className="text-2xl font-bold">{stat.value}</span><span className="text-xs font-semibold text-muted-foreground">{formatMoney(stat.sub)}</span></div></div>
-        </CardContent></Card>; })}
+        ].map((stat, index) => <StatCard key={stat.label} label={stat.label} value={stat.value} note={formatMoney(stat.sub)} icon={stat.icon} tone={index === 1 ? "info" : index === 2 ? "success" : "accent"} />)}
       </div>}
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+      <FilterBar className="justify-between">
         <div className="flex flex-1 gap-2"><div className="relative max-w-md flex-1"><Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="bg-white ps-9" placeholder="Search treatment plans…" /></div>
-          <select value={filter} onChange={(event) => setFilter(event.target.value)} className="rounded-xl border bg-white px-3 text-sm"><option>All</option><option>Proposed</option><option>In progress</option><option>Completed</option><option>On hold</option></select></div>
+          <Select value={filter} onChange={(event) => setFilter(event.target.value)} className="rounded-xl border bg-white px-3 text-sm"><option>All</option><option>Proposed</option><option>In progress</option><option>Completed</option><option>On hold</option></Select></div>
         {canEdit && <Button onClick={() => setCreateOpen(true)}><Plus /> New treatment plan</Button>}
-      </div>
+      </FilterBar>
       <div className="grid gap-4 lg:grid-cols-2">
         {visible.map((plan) => <Card key={plan.id} className="transition hover:-translate-y-0.5 hover:shadow-lg">
           <CardHeader className="flex-row items-start gap-3"><Avatar><AvatarFallback>{initials(plan.patientName)}</AvatarFallback></Avatar>
@@ -461,9 +449,10 @@ export function TreatmentsPage({ patients, role, patientId, embedded = false }: 
             <div className="mt-5 grid grid-cols-3 divide-x rounded-xl bg-slate-50 p-3 text-center"><div><p className="text-[10px] text-muted-foreground">Plan value</p><p className="mt-1 text-sm font-bold">{formatMoney(plan.total)}</p></div><div><p className="text-[10px] text-muted-foreground">Sessions</p><p className="mt-1 text-sm font-bold">{plan.sessionsDone}/{plan.sessionsTotal}</p></div><div><p className="text-[10px] text-muted-foreground">Plan items</p><p className="mt-1 text-sm font-bold">{plan.items?.length ?? plan.procedures.length}</p></div></div>
             <Button className="mt-4 w-full" variant="outline" onClick={() => openWorkspace(plan)}>Open odontogram & plan</Button>
           </CardContent></Card>)}
+        {!visible.length && <EmptyState icon={ClipboardPlus} title="No treatment plans found" description="Try another filter, or create a treatment plan for a patient." className="lg:col-span-2" action={canEdit ? <Button onClick={() => setCreateOpen(true)}><Plus /> New treatment plan</Button> : undefined} />}
       </div>
       <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent><DialogHeader><DialogTitle>Create treatment plan</DialogTitle><DialogDescription>Choose a patient, then build the plan from the interactive odontogram.</DialogDescription></DialogHeader>
-        <form onSubmit={createPlan} className="space-y-4">{patientId ? <input type="hidden" name="patientId" value={patientId} /> : <label className="block text-xs font-semibold">Patient<select name="patientId" required className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option value="">Choose patient…</option>{patients.map((patient) => <option key={patient.id} value={patient.id} data-no-translate>{patient.name} · {patient.patientNo}</option>)}</select></label>}
+        <form onSubmit={createPlan} className="space-y-4">{patientId ? <input type="hidden" name="patientId" value={patientId} /> : <label className="block text-xs font-semibold">Patient<Select name="patientId" required className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option value="">Choose patient…</option>{patients.map((patient) => <option key={patient.id} value={patient.id} data-no-translate>{patient.name} · {patient.patientNo}</option>)}</Select></label>}
           <label className="block text-xs font-semibold">Plan title<Input name="title" required className="mt-1.5" placeholder="Comprehensive treatment plan" /></label>
           <label className="block text-xs font-semibold">Total treatment price<Input name="totalPrice" type="number" min="0" step="0.01" required className="mt-1.5" placeholder="0.00" /></label>
           <DialogFooter><Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button><Button type="submit">Create & open plan</Button></DialogFooter>

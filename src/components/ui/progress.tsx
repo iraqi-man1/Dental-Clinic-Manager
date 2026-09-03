@@ -1,24 +1,26 @@
 "use client";
-import * as ProgressPrimitive from "@radix-ui/react-progress";
+
+import { ProgressBar } from "@heroui/react";
 import { cn } from "@/lib/utils";
 
 export function Progress({
   className,
   value = 0,
   ...props
-}: React.ComponentProps<typeof ProgressPrimitive.Root>) {
+}: Omit<React.ComponentProps<typeof ProgressBar>, "children">) {
   return (
-    <ProgressPrimitive.Root
-      className={cn(
-        "relative h-2 w-full overflow-hidden rounded-full bg-secondary",
-        className,
-      )}
+    <ProgressBar
+      value={value}
+      color="accent"
+      className="w-full"
       {...props}
+      aria-label={props["aria-label"] ?? "Progress"}
     >
-      <ProgressPrimitive.Indicator
-        className="h-full rounded-full bg-primary transition-all"
-        style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
-      />
-    </ProgressPrimitive.Root>
+      <ProgressBar.Track
+        className={cn("h-2 rounded-full bg-default", className)}
+      >
+        <ProgressBar.Fill className="rounded-full bg-accent transition-[width]" />
+      </ProgressBar.Track>
+    </ProgressBar>
   );
 }

@@ -1,9 +1,10 @@
 import * as React from "react";
+import { Chip } from "@heroui/react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border border-transparent px-2 py-1 text-[10px] font-bold leading-none tracking-[.01em]",
+  "inline-flex min-h-5 items-center rounded-lg px-2 py-0.5 text-[10px] font-bold leading-none tracking-[.01em]",
   {
     variants: {
       variant: {
@@ -22,9 +23,32 @@ const badgeVariants = cva(
 export function Badge({
   className,
   variant,
+  children,
   ...props
 }: React.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
+  const color = {
+    default: "accent",
+    success: "success",
+    warning: "warning",
+    danger: "danger",
+    secondary: "default",
+    outline: "default",
+  }[variant ?? "default"] as
+    | "accent"
+    | "success"
+    | "warning"
+    | "danger"
+    | "default";
+  const chipVariant = variant === "outline" ? "tertiary" : "soft";
   return (
-    <span className={cn(badgeVariants({ variant }), className)} {...props} />
+    <Chip
+      {...props}
+      color={color}
+      size="sm"
+      variant={chipVariant}
+      className={cn(badgeVariants({ variant }), className)}
+    >
+      {children}
+    </Chip>
   );
 }
