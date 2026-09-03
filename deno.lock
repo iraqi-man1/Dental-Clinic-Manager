@@ -11,6 +11,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@heroui/react@3.2.4",
+        "npm:@heroui/styles@3.2.4",
         "npm:@radix-ui/react-avatar@1.1.10",
         "npm:@radix-ui/react-dialog@1.1.15",
         "npm:@radix-ui/react-dropdown-menu@2.1.16",
