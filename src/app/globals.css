@@ -1,61 +1,82 @@
 @import "tailwindcss";
-@import "@heroui/styles";
 @import "tw-animate-css";
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--surface);
-  --color-card-foreground: var(--surface-foreground);
-  --color-primary: var(--accent);
-  --color-primary-foreground: var(--accent-foreground);
-  --color-secondary: var(--default);
-  --color-secondary-foreground: var(--default-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
-  --color-input: var(--field-border);
-  --color-destructive: var(--danger);
-  --shadow-card:
-    0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: #ffffff;
+  --color-surface: var(--card);
+  --color-surface-secondary: var(--muted);
+  --color-overlay: var(--popover);
+  --color-default: var(--secondary);
+  --color-default-foreground: var(--secondary-foreground);
+  --color-success: #15803d;
+  --color-success-soft: #ecfdf5;
+  --color-success-soft-foreground: #047857;
+  --color-warning: #b45309;
+  --color-warning-soft: #fffbeb;
+  --color-warning-soft-foreground: #92400e;
+  --color-danger: var(--destructive);
+  --color-danger-soft: #fff1f2;
+  --color-danger-soft-foreground: #be123c;
+  --color-accent-soft: var(--accent);
+  --color-accent-soft-foreground: var(--accent-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --shadow-card: 0 1px 3px rgb(15 23 42 / 0.035);
+  --shadow-overlay: 0 16px 48px rgb(15 23 42 / 0.14);
 }
 
 :root {
   color-scheme: light;
-  --background: oklch(0.976 0.004 180);
-  --foreground: oklch(0.235 0.022 178);
-  --surface: oklch(1 0 0);
-  --surface-foreground: var(--foreground);
-  --surface-secondary: oklch(0.958 0.008 178);
-  --surface-secondary-foreground: var(--foreground);
-  --surface-tertiary: oklch(0.936 0.011 178);
-  --overlay: oklch(1 0 0);
-  --overlay-foreground: var(--foreground);
-  --muted: oklch(0.56 0.018 178);
-  --muted-foreground: var(--muted);
-  --default: oklch(0.945 0.009 178);
-  --default-foreground: oklch(0.31 0.027 178);
-  --accent: oklch(0.61 0.105 177);
-  --accent-foreground: oklch(0.99 0.004 178);
-  --success: oklch(0.67 0.15 151);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.78 0.15 73);
-  --warning-foreground: oklch(0.28 0.05 73);
-  --danger: oklch(0.63 0.21 24);
-  --danger-foreground: oklch(0.99 0 0);
-  --border: oklch(0.895 0.011 178);
-  --field-background: oklch(1 0 0);
+  --background: #f4f7fa;
+  --foreground: #172b40;
+  --card: #ffffff;
+  --card-foreground: #172b40;
+  --popover: #ffffff;
+  --popover-foreground: #172b40;
+  --primary: #087f8c;
+  --primary-foreground: #ffffff;
+  --secondary: #eef3f7;
+  --secondary-foreground: #344b60;
+  --muted: #f1f5f9;
+  --muted-foreground: #617388;
+  --accent: #e9f5f5;
+  --accent-foreground: #086b75;
+  --destructive: #dc3545;
+  --border: #e0e7ef;
+  --input: #cdd8e3;
+  --ring: #087f8c;
+  --sidebar: #122c40;
+  --success: #15803d;
+  --surface-secondary: var(--muted);
+  --separator: var(--border);
+  --field-background: var(--card);
   --field-foreground: var(--foreground);
-  --field-placeholder: oklch(0.62 0.013 178);
-  --field-border: oklch(0.855 0.015 178);
-  --field-border-width: 1px;
-  --focus: var(--accent);
-  --radius: 0.625rem;
-  --field-radius: 0.75rem;
-  --surface-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.035), 0 8px 24px rgba(15, 23, 42, 0.04);
-  --overlay-shadow:
-    0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(15, 23, 42, 0.05);
-  --field-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+  --field-border: var(--input);
+  --field-border-hover: #a8bacb;
+  --field-hover: #ffffff;
+  --radius: 0.5rem;
+  --field-radius: 0.5rem;
+  --field-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
 }
 
 * {
@@ -161,15 +182,6 @@ html[dir="rtl"] .lucide-arrow-right {
   transform: scaleX(-1);
 }
 
-html[dir="rtl"] button[role="switch"] > span {
-  right: 0.25rem;
-  left: auto;
-}
-
-html[dir="rtl"] button[role="switch"][aria-checked="true"] > span {
-  right: 1.5rem;
-}
-
 .desktop-sidebar {
   display: none;
 }
@@ -216,8 +228,8 @@ select {
 }
 
 .clinic-shell select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 15%, transparent);
 }
 
 .clinic-shell table {
@@ -226,16 +238,15 @@ select {
 }
 
 .clinic-shell table thead {
-  color: var(--muted);
+  color: var(--muted-foreground);
   background: color-mix(in oklab, var(--surface-secondary) 70%, white);
 }
 
 .clinic-shell table th {
   min-height: 2.75rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
 }
 
 .clinic-shell table tbody tr {
@@ -266,47 +277,29 @@ select {
 }
 
 .clinic-shell textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 15%, transparent);
 }
 
 .clinic-shell :is(button, input, select, textarea, [role="button"]):focus-visible {
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
 }
 
 .clinic-shell .lucide {
   stroke-width: 1.8;
 }
 
-.modal__dialog > form,
-.modal__dialog > .dialog-body {
-  margin-top: 1.25rem;
-}
+.clinic-sidebar { background: var(--sidebar); color: #e5edf4; }
+.clinic-sidebar :is(button, [role="button"]):focus-visible { outline-color: #5eead4; }
 
-.modal__dialog > form > .modal__footer,
-.modal__dialog > .modal__footer {
-  margin-top: 1.5rem;
-}
-
-.modal__heading {
-  padding-inline-end: 2rem;
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.018em;
-}
-
-.modal__dialog,
-.card {
-  border: 1px solid var(--border);
-}
-
-.input {
-  min-height: 2.5rem;
-}
-
-.button,
-.chip {
-  font-weight: 650;
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 ::selection {
   background: rgba(15, 159, 143, 0.2);

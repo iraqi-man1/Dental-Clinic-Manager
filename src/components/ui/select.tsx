@@ -1,114 +1,43 @@
-"use client";
-
 import * as React from "react";
-import { Label, ListBox, Select as HeroSelect } from "@heroui/react";
 import { cn } from "@/lib/utils";
 
-type NativeSelectProps = Omit<
-  React.SelectHTMLAttributes<HTMLSelectElement>,
-  "multiple" | "size"
->;
+type NativeSelectProps = Omit<React.ComponentProps<"select">, "multiple" | "size">;
 
-type SelectOption = {
-  disabled?: boolean;
-  label: string;
-  noTranslate?: boolean;
-  value: string;
-};
-
-const EMPTY_VALUE = "__clinic_empty_value__";
-
-function collectOptions(children: React.ReactNode): SelectOption[] {
-  const options: SelectOption[] = [];
-
-  React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return;
+function preserveOptionValues(children: React.ReactNode): React.ReactNode {
+  return React.Children.map(children, (child) => {
+    if (!React.isValidElement(child)) return child;
     if (child.type === React.Fragment || child.type === "optgroup") {
-      collectOptions(
-        (child.props as { children?: React.ReactNode }).children,
-      ).forEach((option) => options.push(option));
-      return;
+      const group = child as React.ReactElement<{ children?: React.ReactNode }>;
+      return React.cloneElement(group, {}, preserveOptionValues(group.props.children));
     }
-    if (child.type !== "option") return;
-    const props = child.props as React.OptionHTMLAttributes<HTMLOptionElement>;
-    options.push({
-      value: String(props.value ?? props.children ?? ""),
-      label: React.Children.toArray(props.children).join(""),
-      disabled: props.disabled,
-      noTranslate: Boolean(props["data-no-translate" as keyof typeof props]),
+    if (child.type !== "option") return child;
+    const option = child as React.ReactElement<React.ComponentProps<"option">>;
+    return React.cloneElement(option, {
+      // The document translator changes displayed option text in Arabic. An
+      // explicit value keeps that display change out of persisted form data.
+      value: option.props.value ?? React.Children.toArray(option.props.children).join(""),
     });
   });
-
-  return options;
 }
 
-function toHeroValue(value: string | number | readonly string[] | undefined) {
-  if (Array.isArray(value)) return String(value[0] ?? EMPTY_VALUE);
-  if (value === undefined) return undefined;
-  return String(value) || EMPTY_VALUE;
-}
-
-export function Select({
-  children,
-  className,
-  defaultValue,
-  disabled,
-  name,
-  onChange,
-  required,
-  value,
-  ...props
-}: NativeSelectProps) {
-  const options = collectOptions(children);
-  const ariaLabel = props["aria-label"] ?? name ?? "Select an option";
-  const fullWidth = className?.includes("w-full") ?? false;
-
+// Preserve native options, FormData, validation, and handlers that reset the
+// selected value after adding an item while following shadcn Native Select.
+export function Select({ className, style, children, ...props }: NativeSelectProps) {
   return (
-    <HeroSelect
-      aria-label={ariaLabel}
-      name={name}
-      value={toHeroValue(value)}
-      defaultValue={toHeroValue(defaultValue)}
-      isDisabled={disabled}
-      isRequired={required}
-      fullWidth={fullWidth}
+    <select
+      data-slot="native-select"
       className={cn(
-        "border-0 bg-transparent p-0 shadow-none",
-        fullWidth ? "w-full" : "min-w-[9rem]",
-        className?.includes("mt-1.5") && "mt-1.5",
-        className?.includes("mt-1") && "mt-1",
+        "h-10 min-w-0 appearance-none rounded-lg border border-input bg-background bg-[length:16px_16px] bg-[position:right_0.75rem_center] bg-no-repeat px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 rtl:bg-[position:left_0.75rem_center]",
+        className,
+        "pe-9",
       )}
-      onChange={(next) => {
-        const nextValue = String(next ?? "");
-        const normalized = nextValue === EMPTY_VALUE ? "" : nextValue;
-        onChange?.({
-          target: { value: normalized },
-          currentTarget: { value: normalized },
-        } as React.ChangeEvent<HTMLSelectElement>);
+      style={{
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+        ...style,
       }}
+      {...props}
     >
-      <HeroSelect.Trigger className="h-10 min-w-[9rem] rounded-xl border border-field-border bg-field px-3 text-sm shadow-field">
-        <HeroSelect.Value />
-        <HeroSelect.Indicator />
-      </HeroSelect.Trigger>
-      <HeroSelect.Popover className="min-w-(--trigger-width) rounded-2xl border border-border bg-overlay p-1.5 shadow-overlay">
-        <ListBox aria-label={ariaLabel}>
-          {options.map((option) => (
-            <ListBox.Item
-              id={option.value || EMPTY_VALUE}
-              key={option.value || EMPTY_VALUE}
-              textValue={option.label}
-              isDisabled={option.disabled}
-              className="rounded-xl px-3 py-2 text-sm data-[focused=true]:bg-accent-soft data-[selected=true]:text-accent-soft-foreground"
-            >
-              <Label data-no-translate={option.noTranslate || undefined}>
-                {option.label}
-              </Label>
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </HeroSelect.Popover>
-    </HeroSelect>
+      {preserveOptionValues(children)}
+    </select>
   );
 }

@@ -2,13 +2,10 @@
 
 import {
   Activity,
-  ArrowDownRight,
   ArrowRight,
-  ArrowUpRight,
   CalendarCheck2,
   CircleDollarSign,
   CreditCard,
-  MoreHorizontal,
   Stethoscope,
   Users,
 } from "lucide-react";
@@ -26,7 +23,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Select } from "@/components/ui/select";
 import type { Appointment, NavKey, Patient, Payment, TreatmentSession } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
@@ -52,7 +48,7 @@ const statStyle = [
     tint: "bg-blue-50 text-blue-700",
   },
   {
-    label: "Revenue this month",
+    label: "Total collected",
     value: "0",
     amount: 0,
     note: "0 invoices",
@@ -123,7 +119,7 @@ export function DashboardPage({
   const stats = statStyle.map((stat) => stat.label === "Today’s appointments"
     ? { ...stat, value: String(today.length), note: `${today.filter((appointment) => appointment.status === "Confirmed").length} confirmed` }
     : stat.label === "Total patients" ? { ...stat, value: patients.length.toLocaleString(), note: "Live patient records" }
-    : stat.label === "Revenue this month" ? { ...stat, amount: revenue, noteAmount: undefined, note: `${payments.length} invoices` }
+    : stat.label === "Total collected" ? { ...stat, amount: revenue, noteAmount: undefined, note: `${payments.length} invoices` }
     : stat.label === "Outstanding" ? { ...stat, amount: outstanding, note: `${payments.filter((payment) => payment.status !== "Paid").length} open invoices` }
     : stat.label === "Active treatments" ? { ...stat, value: String(activeTreatments), note: `${sessions.filter((session) => session.status !== "completed" && session.status !== "cancelled").length} sessions remaining` }
     : stat);
@@ -141,8 +137,8 @@ export function DashboardPage({
     ...today.slice(0, 2).map((appointment) => ({ icon: CalendarCheck2, title: "Appointment booked", detail: `${appointment.patientName} · ${appointment.treatment}`, time: appointment.time, bg: "bg-blue-50 text-blue-700" })),
   ].slice(0, 4);
   return (
-    <div className="space-y-5">
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="space-y-6">
+      <section className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-5 xl:grid-cols-3">
         {stats.map((stat, index) => (
           <StatCard
             key={stat.label}
@@ -151,38 +147,30 @@ export function DashboardPage({
             note={stat.note}
             icon={stat.icon}
             tone={(index === 2 ? "success" : index === 3 ? "warning" : index === 4 ? "danger" : index === 1 ? "info" : "accent")}
-            accessory={
-              <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-1 text-[10px] font-bold text-success-soft-foreground">
-                {stat.up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                {stat.trend}
-              </span>
-            }
+            className={cn(index === 0 && "border-primary/20 bg-accent/45", "[&_[data-slot=card-content]]:p-5")}
           />
         ))}
       </section>
-      <section className="grid gap-5 xl:grid-cols-[1.55fr_1fr]">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
+      <section className="grid gap-5 xl:grid-cols-[1.1fr_1fr]">
+        <Card className="min-w-0 xl:order-2">
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4">
             <div>
               <CardTitle>Revenue overview</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Income compared with operating expenses
+              <p className="mt-1 text-sm text-muted-foreground">
+                Recorded payments
               </p>
             </div>
-            <Select className="rounded-lg border bg-white px-3 py-2 text-xs font-medium outline-none">
-              <option>Last 6 months</option>
-              <option>This year</option>
-            </Select>
+            <Badge variant="secondary">All time</Badge>
           </CardHeader>
-          <CardContent>
-            <div className="mb-4 flex items-end gap-6">
+          <CardContent className="pt-5">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="text-xs text-muted-foreground">Net revenue</p>
-                <p className="text-2xl font-bold">{formatMoney(revenue)}</p>
+                <p className="text-sm text-muted-foreground">Total collected</p>
+                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(revenue)}</p>
               </div>
               <Badge variant="success">{payments.length ? `${payments.length} live invoices` : "No financial activity yet"}</Badge>
             </div>
-            <div className="h-[245px] w-full">
+            <div className="h-[225px] min-w-0 w-full" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={paymentChartData}
@@ -192,10 +180,10 @@ export function DashboardPage({
                     <linearGradient id="revenue" x1="0" y1="0" x2="0" y2="1">
                       <stop
                         offset="0%"
-                        stopColor="#0f9f8f"
-                        stopOpacity={0.25}
+                        stopColor="#087f8c"
+                        stopOpacity={0.18}
                       />
-                      <stop offset="100%" stopColor="#0f9f8f" stopOpacity={0} />
+                      <stop offset="100%" stopColor="#087f8c" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid
@@ -207,18 +195,18 @@ export function DashboardPage({
                     dataKey="month"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 11, fill: "#82909c" }}
+                    tick={{ fontSize: 12, fill: "#617388" }}
                     dy={8}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fill: "#9aa5af" }}
+                    tick={{ fontSize: 12, fill: "#617388" }}
                     tickFormatter={(v) => formatCompactMoney(Number(v))}
                   />
                   <Tooltip
                     contentStyle={{
-                      borderRadius: 12,
+                      borderRadius: 8,
                       border: "1px solid #e5e9ec",
                       boxShadow: "0 12px 30px rgba(15,23,42,.10)",
                       fontSize: 12,
@@ -228,53 +216,45 @@ export function DashboardPage({
                   <Area
                     type="monotone"
                     dataKey="revenue"
-                    stroke="#0f9f8f"
-                    strokeWidth={3}
+                    stroke="#087f8c"
+                    strokeWidth={2.5}
                     fill="url(#revenue)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="expenses"
-                    stroke="#c4cdd4"
-                    strokeWidth={2}
-                    fill="transparent"
-                    strokeDasharray="5 5"
                   />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
+        <Card className="min-w-0 xl:order-1">
+          <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4">
             <div>
               <CardTitle>Today’s schedule</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {new Date().toLocaleDateString(language === "ar" ? "ar-IQ" : "en-US", { weekday: "long", month: "long", day: "numeric" })}
               </p>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => onNavigate("appointments")}
             >
               View calendar <ArrowRight />
             </Button>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 pt-4">
             {shown.map((appt) => (
               <Button
                 key={appt.id}
                 type="button"
                 variant="ghost"
                 onClick={() => onNavigate("appointments")}
-                className="h-auto w-full justify-start rounded-xl border border-transparent p-2.5 text-start hover:border-border"
+                className="h-auto w-full justify-start gap-3 rounded-lg border border-border/70 p-3 text-start hover:border-primary/30 hover:bg-accent/40"
               >
                 <div className="w-14 shrink-0">
                   <p className="text-xs font-bold text-slate-800">
                     {appt.time.replace(" ", "")}{" "}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {appt.room}
                   </p>
                 </div>
@@ -289,7 +269,7 @@ export function DashboardPage({
                   <p className="truncate text-sm font-semibold" data-no-translate>
                     {appt.patientName}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground" data-no-translate>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground" data-no-translate>
                     {appt.treatment}
                   </p>
                 </div>
@@ -306,7 +286,7 @@ export function DashboardPage({
                 icon={CalendarCheck2}
                 title="No appointments today"
                 description="The day is clear. New bookings will appear here immediately."
-                className="min-h-44 border-0 bg-transparent p-5"
+                className="min-h-64 border-0 bg-transparent p-5"
               />
             )}
           </CardContent>
@@ -316,14 +296,12 @@ export function DashboardPage({
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Treatment pipeline</CardTitle>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal />
-            </Button>
+            <Stethoscope className="size-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="space-y-5">
             {pipeline.map((item) => (
               <div key={item.label}>
-                <div className="mb-2 flex items-center justify-between text-xs">
+                <div className="mb-2 flex items-center justify-between gap-2 text-sm">
                   <span className="font-semibold">
                     {item.label}{" "}
                     <span className="font-normal text-muted-foreground">
@@ -357,21 +335,21 @@ export function DashboardPage({
           <CardContent>
             <div className="flex items-center justify-around py-2">
               <div
-                className="relative grid size-28 place-items-center rounded-full"
+                className="relative grid size-28 shrink-0 place-items-center rounded-full"
                 style={{
-                  background: `conic-gradient(#0f9f8f 0 ${retention}%, #edf1f2 ${retention}% 100%)`,
+                  background: `conic-gradient(#087f8c 0 ${retention}%, #edf1f2 ${retention}% 100%)`,
                 }}
               >
                 <div className="grid size-[86px] place-items-center rounded-full bg-white text-center">
                   <div>
                     <p className="text-2xl font-bold">{retention}%</p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Retention
                     </p>
                   </div>
                 </div>
               </div>
-              <div className="space-y-3 text-xs">
+              <div className="space-y-3 text-sm">
                 <div>
                   <p className="text-muted-foreground">Active patients</p>
                   <p className="text-lg font-bold">{activePatients}</p>
@@ -402,12 +380,12 @@ export function DashboardPage({
                     <Icon className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold">{item.title}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="text-sm font-medium">{item.title}</p>
+                    <p className="truncate text-xs text-muted-foreground" data-no-translate>
                       {item.detail}
                     </p>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {item.time}
                   </span>
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Tooltip } from "@heroui/react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Bell,
   Boxes,
@@ -11,6 +11,7 @@ import {
   FileBarChart,
   HeartPulse,
   LayoutDashboard,
+  Languages,
   Menu,
   Pin,
   PinOff,
@@ -114,7 +115,7 @@ function patientNumberFromId(id: string) {
 
 const pageMeta: Record<NavKey, { title: string; description: string }> = {
   dashboard: {
-    title: "Good morning, Maya",
+    title: "Clinic overview",
     description: "Here’s what’s happening at BrightSmile today.",
   },
   patients: {
@@ -162,13 +163,12 @@ const allowedNavigation = (role: ClinicRole): NavKey[] => {
 function Brand({ expanded = true, clinicName }: { expanded?: boolean; clinicName: string }) {
   return (
     <div className={cn("flex items-center", expanded ? "gap-3" : "justify-center")}>
-      <div className="relative grid size-10 shrink-0 place-items-center rounded-[14px] bg-accent text-white shadow-[0_8px_20px_color-mix(in_oklab,var(--accent)_22%,transparent)]">
-        <span className="text-lg font-black tracking-[-0.08em]">BS</span>
-        <span className="absolute -end-1 -top-1 size-3 rounded-full border-2 border-white bg-success" />
+      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-teal-400/15 text-teal-300 ring-1 ring-inset ring-teal-300/20">
+        <HeartPulse className="size-6" />
       </div>
       <div className={cn("min-w-0", !expanded && "hidden")}>
-        <p className="truncate font-bold tracking-tight text-slate-900" data-no-translate>{clinicName}</p>
-        <p className="text-[10px] font-bold uppercase tracking-[.16em] text-muted-foreground">
+        <p className="truncate text-base font-semibold tracking-tight text-white" data-no-translate>{clinicName}</p>
+        <p className="mt-0.5 text-xs text-slate-400">
           Clinic workspace
         </p>
       </div>
@@ -249,22 +249,21 @@ function SidebarContent({
   ) => {
     if (expanded || mobile) return child;
     return (
-    <Tooltip.Root key={tooltipKey} delay={100} closeDelay={100}>
-      {child}
-      <Tooltip.Content
-        placement={language === "ar" ? "left" : "right"}
-        offset={10}
-        showArrow
+    <Tooltip key={tooltipKey} delayDuration={100}>
+      <TooltipTrigger asChild>{child}</TooltipTrigger>
+      <TooltipContent
+        side={language === "ar" ? "left" : "right"}
+        sideOffset={10}
         className="z-[70] text-xs font-medium"
       >
         {label}
-      </Tooltip.Content>
-    </Tooltip.Root>
+      </TooltipContent>
+    </Tooltip>
     );
   };
 
   return (
-    <>
+    <TooltipProvider>
       <div className={cn("py-5", expanded ? "px-5" : "px-3")}>
         <div className={cn("flex items-center", expanded ? "justify-between" : "flex-col gap-3")}>
           <Brand expanded={expanded} clinicName={clinic.name} />
@@ -277,28 +276,28 @@ function SidebarContent({
                 onClick={onTogglePin}
                 aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
                 aria-pressed={pinned}
-                className="size-8 shrink-0 rounded-lg text-slate-400 hover:text-primary"
+                className="size-7 shrink-0 rounded-md text-slate-400 hover:bg-white/10 hover:text-white"
               >
                 {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
               </Button>,
             )}
         </div>
       </div>
-      <div className={cn("mb-5 rounded-2xl border border-primary/10 bg-primary/[.045]", expanded ? "mx-4 p-3.5" : "mx-3 p-2")}>
+      <div className={cn("mb-6 rounded-lg border border-white/10 bg-white/[.035]", expanded ? "mx-4 p-3" : "mx-3 p-2")}>
         <div className={cn("flex items-center", expanded ? "gap-3" : "justify-center")}>
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-white text-primary shadow-sm">
+          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-white/10 text-teal-200">
             <ShieldCheck className="size-4" />
           </div>
           <div className={cn("min-w-0", !expanded && "hidden")}>
-            <p className="truncate text-xs font-bold text-slate-900" data-no-translate>{clinic.name}</p>
-            <p className="truncate text-[10px] text-muted-foreground" data-no-translate>{clinic.address?.street || clinic.phone || "Clinic workspace"}</p>
+            <p className="truncate text-sm font-medium text-slate-100" data-no-translate>{clinic.name}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-400" data-no-translate>{clinic.address?.street || clinic.phone || "Clinic workspace"}</p>
           </div>
         </div>
       </div>
       <nav className={cn("flex-1 overflow-y-auto px-3", expanded ? "space-y-6" : "space-y-4")}>
         {navGroups.map((group) => (
           <div key={group.label}>
-            <p className={cn("mb-2 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-slate-400", !expanded && "sr-only")}>
+            <p className={cn("mb-2 px-3 text-xs font-medium uppercase tracking-widest text-slate-400", !expanded && "sr-only")}>
               {group.label}
             </p>
             <div className="space-y-1">
@@ -312,20 +311,21 @@ function SidebarContent({
                     variant={selected ? "default" : "ghost"}
                     onClick={() => onNavigate(item.key)}
                     aria-label={!expanded ? item.label : undefined}
+                    aria-current={selected ? "page" : undefined}
                     className={cn(
-                      "group h-11 w-full items-center rounded-xl py-2.5 text-sm font-semibold transition-all",
+                      "group h-11 w-full items-center rounded-lg py-2.5 text-sm font-medium transition-colors",
                       expanded ? "gap-3 px-3" : "justify-center px-2",
                       selected
-                        ? "text-white shadow-[0_8px_18px_color-mix(in_oklab,var(--accent)_18%,transparent)]"
-                        : "text-slate-600 hover:text-slate-950",
+                        ? "bg-primary text-white shadow-sm hover:bg-primary/90"
+                        : "text-slate-300 hover:bg-white/7 hover:text-white",
                     )}
                   >
-                    <Icon className={cn("size-[18px] shrink-0", !selected && "text-slate-400 group-hover:text-primary")} />
+                    <Icon className={cn("size-[18px] shrink-0", !selected && "text-slate-400 group-hover:text-teal-200")} />
                     <span className={cn("flex-1 text-start", !expanded && "hidden")}>{item.label}</span>
                     {count > 0 && expanded ? (
                       <span className={cn(
                         "rounded-full px-2 py-0.5 text-[10px] font-bold",
-                        selected ? "bg-white/20 text-white" : item.key === "inventory" ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500",
+                        selected ? "bg-white/20 text-white" : item.key === "inventory" ? "bg-rose-400/15 text-rose-200" : "bg-white/10 text-slate-300",
                       )}>{count}</span>
                     ) : null}
                   </Button>,
@@ -342,10 +342,11 @@ function SidebarContent({
             variant={active === "settings" ? "default" : "ghost"}
             onClick={() => onNavigate("settings")}
             aria-label={!expanded ? "Clinic settings" : undefined}
+            aria-current={active === "settings" ? "page" : undefined}
             className={cn(
-              "h-11 w-full items-center rounded-xl py-2.5 text-sm font-semibold transition",
+              "h-11 w-full items-center rounded-lg py-2.5 text-sm font-medium transition",
               expanded ? "gap-3 px-3" : "justify-center px-2",
-              active === "settings" ? "text-white" : "text-slate-600",
+              active === "settings" ? "text-white" : "text-slate-300 hover:bg-white/7 hover:text-white",
             )}
           >
             <Settings className="size-[18px] shrink-0" />
@@ -353,22 +354,22 @@ function SidebarContent({
           </Button>,
         )}
       </div>}
-      <div className={cn("border-t", expanded ? "p-4" : "p-3")}>
+      <div className={cn("border-t border-white/10", expanded ? "p-4" : "p-3")}>
         <div className={cn("flex items-center rounded-xl", expanded ? "gap-3 p-2" : "justify-center")}>
-          <Avatar><AvatarFallback>MC</AvatarFallback></Avatar>
+          <Avatar><AvatarFallback className="bg-white/10 text-teal-200" data-no-translate>{member?.fullName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2) || "CU"}</AvatarFallback></Avatar>
           <div className={cn("min-w-0 flex-1", !expanded && "hidden")}>
             <p className="truncate text-sm font-semibold" data-no-translate>{member?.fullName ?? "Clinic user"}</p>
-            <p className="truncate text-xs text-muted-foreground">{role.replace("_", " ")}</p>
+            <p className="truncate text-xs capitalize text-slate-400">{role.replace("_", " ")}</p>
           </div>
-          {expanded && <ChevronDown className="size-4 text-muted-foreground" />}
+          {expanded && <ShieldCheck className="size-4 text-slate-400" />}
         </div>
       </div>
-    </>
+    </TooltipProvider>
   );
 }
 
 export function ClinicApp() {
-  const { formatMoney } = useClinicPreferences();
+  const { formatMoney, language, setLanguage } = useClinicPreferences();
   const configured = hasSupabaseConfig();
   const [active, setActive] = useState<NavKey>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -638,7 +639,7 @@ export function ClinicApp() {
         onMouseEnter={expandSidebarOnHover}
         onMouseLeave={collapseSidebarAfterHover}
         className={cn(
-          "desktop-sidebar fixed inset-y-0 start-0 z-30 flex-col border-e border-border bg-surface",
+          "clinic-sidebar desktop-sidebar fixed inset-y-0 start-0 z-30 flex-col border-e border-white/5",
           sidebarPreferenceReady
             ? "opacity-100 transition-[width,box-shadow,opacity] duration-300 ease-out"
             : "opacity-0",
@@ -665,12 +666,12 @@ export function ClinicApp() {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
           />
-          <aside className="mobile-sidebar absolute inset-y-0 start-0 flex w-[280px] max-w-[85vw] flex-col border-e border-border bg-surface shadow-overlay">
+          <aside className="clinic-sidebar mobile-sidebar absolute inset-y-0 start-0 flex w-[280px] max-w-[85vw] flex-col border-e border-white/5 shadow-overlay">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setMobileOpen(false)}
-              className="mobile-nav-close absolute end-3 top-3 rounded-lg"
+              className="mobile-nav-close absolute end-2 top-1 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
               aria-label="Close navigation"
             >
               <X className="size-5" />
@@ -686,7 +687,7 @@ export function ClinicApp() {
           sidebarPinned ? "desktop-sidebar-offset-expanded" : "desktop-sidebar-offset-collapsed",
         )}
       >
-        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border/80 bg-surface/92 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur-xl sm:gap-5 sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="icon"
@@ -696,12 +697,16 @@ export function ClinicApp() {
           >
             <Menu />
           </Button>
-          <div className="relative hidden w-full max-w-md md:block">
+          <div className="hidden items-center gap-2 border-e pe-5 text-sm font-semibold xl:flex">
+            <span className="size-2 rounded-full bg-primary" />
+            <span className="whitespace-nowrap">{displayActive === "dashboard" ? "Overview" : pageMeta[displayActive].title}</span>
+          </div>
+          <div className="relative hidden w-full max-w-sm md:block">
             <Search className="absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-transparent bg-surface-secondary/80 ps-10 focus:bg-white"
+              className="border-transparent bg-muted/70 ps-10 shadow-none focus:bg-white"
               placeholder="Search patients, invoices, appointments…"
             />
             {matchingPatients.length > 0 && (
@@ -733,6 +738,9 @@ export function ClinicApp() {
             )}
           </div>
           <div className="ms-auto flex items-center gap-1 sm:gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setLanguage(language === "en" ? "ar" : "en")} aria-label={language === "en" ? "العربية" : "English"} className="gap-1.5 px-2 text-muted-foreground" data-no-translate>
+              <Languages className="size-4" /><span className="text-xs">{language === "en" ? "العربية" : "English"}</span>
+            </Button>
             <div className="relative">
               <Button
                 variant="ghost"
@@ -790,15 +798,18 @@ export function ClinicApp() {
             />
           </div>
         </header>
-        <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="mx-auto min-w-0 max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <PageHeader
             title={pageMeta[displayActive].title}
             description={displayActive === "dashboard" ? `Here’s what’s happening at ${clinicInfo.name} today.` : pageMeta[displayActive].description}
             status={
-              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-card">
-                <span className="size-2 rounded-full bg-success shadow-[0_0_0_4px_color-mix(in_oklab,var(--success)_14%,transparent)]" />
-                Live workspace
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="hidden items-center gap-2 text-xs text-muted-foreground sm:inline-flex"><CalendarDays className="size-4" />{new Date().toLocaleDateString(language === "ar" ? "ar-IQ" : "en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+                  <span className={cn("size-1.5 rounded-full", configured ? "bg-success" : "bg-amber-500")} />
+                  {configured ? "Live workspace" : "Demo workspace"}
+                </span>
+              </div>
             }
           />
           {initialLoading ? <PageSkeleton /> : <>

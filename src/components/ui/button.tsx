@@ -1,18 +1,19 @@
 import * as React from "react";
-import { Button as HeroButton } from "@heroui/react";
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "shrink-0 rounded-xl font-semibold tracking-[-0.01em] [&_svg]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "shadow-[0_1px_2px_rgba(15,23,42,.08)]",
-        secondary: "",
-        outline: "bg-surface",
-        ghost: "",
-        destructive: "",
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        outline: "border border-input bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground",
+        ghost: "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        destructive: "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-10 px-4 py-2",
@@ -29,33 +30,16 @@ export function Button({
   className,
   variant,
   size,
-  disabled,
-  type,
+  asChild = false,
   ...props
 }: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants>) {
-  const heroVariant = {
-    default: "primary",
-    secondary: "secondary",
-    outline: "outline",
-    ghost: "ghost",
-    destructive: "danger",
-  }[variant ?? "default"] as
-    | "primary"
-    | "secondary"
-    | "outline"
-    | "ghost"
-    | "danger";
-  const heroSize = size === "sm" ? "sm" : size === "lg" ? "lg" : "md";
+  VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
+  const Component = asChild ? Slot : "button";
   return (
-    <HeroButton
-      {...(props as unknown as React.ComponentProps<typeof HeroButton>)}
-      type={type}
-      variant={heroVariant}
-      size={heroSize}
-      isIconOnly={size === "icon"}
-      isDisabled={disabled}
+    <Component
+      data-slot="button"
       className={cn(buttonVariants({ variant, size }), className)}
+      {...props}
     />
   );
 }

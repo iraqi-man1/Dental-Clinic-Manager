@@ -2,7 +2,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Switch } from "@heroui/react";
+import { Switch } from "@/components/ui/switch";
 import {
   Bell,
   Building2,
@@ -26,21 +26,18 @@ import type { ClinicInfo } from "@/lib/types";
 function Toggle({
   checked,
   onChange,
+  label,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  label: string;
 }) {
   return (
     <Switch
-      aria-label="Toggle preference"
-      isSelected={checked}
-      onChange={onChange}
-      size="sm"
-    >
-      <Switch.Control>
-        <Switch.Thumb />
-      </Switch.Control>
-    </Switch>
+      aria-label={label}
+      checked={checked}
+      onCheckedChange={onChange}
+    />
   );
 }
 
@@ -223,7 +220,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
                     <p className="text-sm font-semibold">{x[0]}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{x[1]}</p>
                   </div>
-                  <Toggle checked={x[2]} onChange={x[3]} />
+                  <Toggle checked={x[2]} onChange={x[3]} label={x[0]} />
                 </div>
               ))}
               <div className="flex justify-end pt-5">

@@ -158,7 +158,8 @@ function Receipt({
   const remaining = transaction?.remaining ?? Math.max(0, payment.total - payment.paid - payment.discount);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md print:max-w-none print:border-0 print:shadow-none">
+      <DialogContent aria-describedby={undefined} className="max-w-md print:max-w-none print:border-0 print:shadow-none">
+        <DialogTitle className="sr-only">Receipt</DialogTitle>
         <div className="print-area">
           <div className="border-b border-dashed pb-5 text-center">
             <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-primary text-xl font-black text-white">
