@@ -4,7 +4,6 @@ import { FormEvent, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Boxes,
-  Download,
   Minus,
   PackageCheck,
   Plus,
@@ -14,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PrintActions } from "@/components/clinic/print-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { ClinicRole, InventoryItem, PurchaseOrder, PurchaseOrderItem } from "@/lib/types";
+import { useClinicPreferences } from "@/lib/clinic-preferences";
 import { cn } from "@/lib/utils";
 import { persistPurchaseOrder } from "@/lib/supabase/clinic-data";
 import {
@@ -76,7 +77,7 @@ function PurchaseOrderDialog({ items, clinic, open, onOpenChange }: {
       {preview.notes && <div className="mt-5 rounded-xl bg-slate-50 p-3 text-xs"><strong>Order notes:</strong> <span data-no-translate>{preview.notes}</span></div>}
       <div className="mt-12 grid grid-cols-2 gap-16 text-center text-xs"><div className="border-t pt-2">Prepared by</div><div className="border-t pt-2">Authorized signature</div></div>
     </div>
-    <DialogFooter className="print:hidden"><Button variant="outline" onClick={() => setPreview(null)}>Edit</Button><Button onClick={() => window.print()}><Printer /> Print / Save PDF</Button></DialogFooter>
+    <DialogFooter className="print:hidden"><Button variant="outline" onClick={() => setPreview(null)}>Edit</Button><PrintActions filename={preview.orderNumber} /></DialogFooter>
   </DialogContent></Dialog>;
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>Create purchase order</DialogTitle><DialogDescription>Select stock items or add any material manually. Saving this order does not change inventory quantities.</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Order date<Input name="orderDate" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} className="mt-1.5" /></label><label className="text-xs font-semibold">Supplier name<Input name="supplierName" className="mt-1.5" /></label><label className="text-xs font-semibold">Supplier contact<Input name="supplierContact" className="mt-1.5" /></label><label className="text-xs font-semibold">Delivery address<Input name="deliveryAddress" className="mt-1.5" /></label></div>
@@ -97,6 +98,8 @@ export function InventoryPage({
   role: ClinicRole;
   clinic: { name: string; phone?: string; address?: Record<string, string> };
 }) {
+  const { language, t } = useClinicPreferences();
+  const [printOpen, setPrintOpen] = useState(false);
   const [stockOverrides, setStockOverrides] = useState<Record<string, number>>(
     {},
   );
@@ -184,7 +187,7 @@ export function InventoryPage({
           {
             label: "Inventory items",
             value: current.length + "",
-            detail: "Across 6 categories",
+            detail: "",
             icon: Boxes,
             color: "bg-blue-50 text-blue-700",
           },
@@ -197,8 +200,8 @@ export function InventoryPage({
           },
           {
             label: "Stock coverage",
-            value: "94%",
-            detail: "30-day availability",
+            value: `${current.length ? Math.round((current.length - low.length) / current.length * 100) : 0}%`,
+            detail: "Above reorder level",
             icon: PackageCheck,
             color: "bg-emerald-50 text-emerald-700",
           },
@@ -253,10 +256,10 @@ export function InventoryPage({
           {canPurchase && <Button variant="outline" onClick={() => setPurchaseOpen(true)}><ShoppingCart /> Create purchase order</Button>}
           <Button
             variant="outline"
-            onClick={() => toast.success("Inventory CSV exported")}
+            onClick={() => setPrintOpen(true)}
           >
-            <Download />
-            Export
+            <Printer />
+            Print / Save PDF
           </Button>
           <Button onClick={() => setOpen(true)}>
             <Plus />
@@ -319,7 +322,19 @@ export function InventoryPage({
           </form>
         </DialogContent>
       </Dialog>
-      <PurchaseOrderDialog items={items} clinic={clinic} open={purchaseOpen} onOpenChange={setPurchaseOpen} />
+      <Dialog open={printOpen} onOpenChange={setPrintOpen}>
+        <DialogContent aria-describedby={undefined} className="max-w-5xl">
+          <DialogTitle className="sr-only">Inventory report</DialogTitle>
+          <div className="print-area overflow-x-auto bg-white text-slate-950" dir={language === "ar" ? "rtl" : "ltr"}>
+            <div className="mb-5 flex items-start justify-between gap-4 border-b pb-4 pe-6 print:pe-0"><div><h2 className="text-xl font-bold" data-no-translate>{clinic.name}</h2><p className="text-sm">Inventory report</p></div><p className="text-sm">{new Date().toLocaleDateString(language === "ar" ? "ar-IQ" : "en-US")}</p></div>
+            <p className="mb-3 text-xs" data-no-translate>{t(filter)}{search ? ` · ${search}` : ""}</p>
+            <table className="min-w-[640px] w-full border-collapse text-start text-xs print:min-w-0"><thead><tr>{["Item", "SKU", "In stock", "Reorder at", "Supplier", "Expiry"].map((label) => <th key={label} className="border-b p-2 text-start">{label}</th>)}</tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td className="border-b p-2" data-no-translate>{item.name}</td><td className="border-b p-2" data-no-translate>{item.sku}</td><td className="border-b p-2">{item.stock} {item.unit}</td><td className="border-b p-2">{item.minimum} {item.unit}</td><td className="border-b p-2" data-no-translate>{item.supplier}</td><td className="border-b p-2" data-no-translate>{item.expiry ?? "—"}</td></tr>)}</tbody></table>
+            {!visible.length && <p className="py-5 text-center text-sm">No inventory items found</p>}
+          </div>
+          <DialogFooter className="print:hidden"><Button variant="outline" onClick={() => setPrintOpen(false)}>Close</Button><PrintActions filename="inventory" /></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <PurchaseOrderDialog items={current} clinic={clinic} open={purchaseOpen} onOpenChange={setPurchaseOpen} />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { CalendarClock, ChevronLeft, ChevronRight, GripVertical, Plus, Search } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, Clock3, GripVertical, Plus, Search, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,12 +23,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Appointment, ClinicMember, Patient, ProcedureCatalogItem } from "@/lib/types";
 import { cn, iraqiMobileValidationMessage, normalizeIraqiMobileNumber } from "@/lib/utils";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
-import { FilterBar } from "@/components/clinic/app-ui";
+import { EmptyState, FilterBar } from "@/components/clinic/app-ui";
 
 const timeSlots = Array.from({ length: 20 }, (_, index) => {
   const minutes = 8 * 60 + index * 30;
@@ -43,37 +44,71 @@ const appointmentSlot = (time: string) => {
   return `${String(Math.floor(snapped / 60)).padStart(2, "0")}:${String(snapped % 60).padStart(2, "0")}`;
 };
 
-function DraggableAppointment({ appointment, compact = false }: {
+type CalendarActions = {
+  canManage: boolean;
+  onSelect: (appointment: Appointment) => void;
+};
+
+function DraggableAppointment({ appointment, compact = false, canManage, onSelect }: {
   appointment: Appointment; compact?: boolean;
-}) {
-  const { formatMoney } = useClinicPreferences();
-  const movable = appointment.status !== "Completed" && appointment.status !== "Cancelled";
+} & CalendarActions) {
+  const movable = canManage && appointment.status !== "Completed" && appointment.status !== "Cancelled";
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => onSelect(appointment)}
       draggable={movable}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/appointment-id", appointment.id);
       }}
-      title={movable ? "Drag to reschedule" : "Completed or cancelled appointments cannot be moved"}
       className={cn(
-        "group rounded-xl text-white shadow-sm transition hover:shadow-md",
-        compact ? "p-2" : "p-2.5",
+        "group w-full min-w-0 rounded-lg border border-border border-s-4 bg-white text-start text-foreground shadow-xs transition hover:bg-accent/40 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-primary",
+        compact ? "p-2" : "p-3",
         movable && "cursor-grab active:cursor-grabbing",
+        appointment.status === "Cancelled" && "opacity-60",
       )}
-      style={{ backgroundColor: appointment.color }}
+      style={{ borderInlineStartColor: appointment.color }}
     >
-      <div className="flex items-start gap-1.5">
-        {movable && <GripVertical className="mt-0.5 size-3 shrink-0 opacity-60" />}
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold opacity-80">{appointment.time}–{appointment.endTime}</p>
-          <p className="mt-0.5 truncate text-xs font-semibold" data-no-translate>{appointment.patientName}</p>
-          <p className="mt-1 truncate text-[10px] opacity-90" data-no-translate>{appointment.treatment} · {formatMoney(appointment.treatmentPrice)}</p>
-          <p className="mt-0.5 truncate text-[10px] opacity-80" data-no-translate>{appointment.doctor}</p>
-        </div>
-      </div>
-    </div>
+      <span className="flex items-start justify-between gap-2">
+        <span className="flex flex-wrap items-center gap-1 text-[11px] font-medium text-muted-foreground"><Clock3 className="size-3 shrink-0" /><span dir="ltr">{appointment.time} – {appointment.endTime}</span></span>
+        {movable && <GripVertical className="size-3 shrink-0 text-muted-foreground" />}
+      </span>
+      <span className="mt-1.5 block break-words text-sm font-semibold" data-no-translate>{appointment.patientName}</span>
+      <span className="mt-1 block truncate text-xs text-muted-foreground" data-no-translate>{appointment.treatment}</span>
+      {!compact && <span className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Stethoscope className="size-3.5" /><span data-no-translate>{appointment.doctor}</span></span><Badge variant={appointment.status === "Pending" ? "warning" : appointment.status === "Cancelled" ? "secondary" : "default"}>{appointment.status}</Badge></span>}
+    </button>
   );
+}
+
+function AppointmentDetails({ appointment, canManage, onClose, onSave }: {
+  appointment: Appointment; canManage: boolean; onClose: () => void;
+  onSave: (appointment: Appointment, date: string, time?: string) => Promise<boolean>;
+}) {
+  const { formatMoney } = useClinicPreferences();
+  const [saving, setSaving] = useState(false);
+  const movable = canManage && appointment.status !== "Completed" && appointment.status !== "Cancelled";
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!movable || saving) return;
+    const form = new FormData(event.currentTarget);
+    setSaving(true);
+    try {
+      if (await onSave(appointment, String(form.get("date")), String(form.get("time")))) {
+        toast.success("Appointment rescheduled and saved");
+        onClose();
+      }
+    } finally { setSaving(false); }
+  };
+  const exactTime = /^\d{2}:\d{2}$/.test(appointment.time) ? appointment.time : format(new Date(`2000-01-01 ${appointment.time}`), "HH:mm");
+  return <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}><DialogContent>
+    <DialogHeader><DialogTitle>Appointment details</DialogTitle><DialogDescription>Review the visit details and scheduled time.</DialogDescription></DialogHeader>
+    <div className="rounded-xl border bg-accent/30 p-4"><h3 className="text-lg font-semibold" data-no-translate>{appointment.patientName}</h3><p className="mt-1 text-sm text-muted-foreground" data-no-translate>{appointment.treatment}</p><div className="mt-3 flex flex-wrap items-center gap-3"><Badge>{appointment.status}</Badge><span className="text-sm" data-no-translate>{appointment.room}</span></div></div>
+    <dl className="grid grid-cols-2 gap-4 text-sm"><div><dt className="text-muted-foreground">Doctor</dt><dd className="mt-1 font-medium" data-no-translate>{appointment.doctor}</dd></div><div><dt className="text-muted-foreground">Treatment price</dt><dd className="mt-1 font-medium">{formatMoney(appointment.treatmentPrice)}</dd></div></dl>
+    <form onSubmit={submit} className="space-y-5"><div className="grid grid-cols-2 gap-3"><label className="text-xs font-semibold">Date<Input name="date" type="date" defaultValue={appointment.date} required disabled={!movable || saving} className="mt-1.5" /></label><label className="text-xs font-semibold">Start time<Input name="time" type="time" defaultValue={exactTime} required disabled={!movable || saving} className="mt-1.5" /></label></div>
+    {movable && <p className="text-xs leading-5 text-muted-foreground">The visit duration stays the same when rescheduling.</p>}
+    <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={onClose}>Close</Button>{movable && <Button disabled={saving}>{saving ? "Saving…" : "Save schedule"}</Button>}</DialogFooter></form>
+  </DialogContent></Dialog>;
 }
 
 function DropCell({ date, time, children, className, onMove }: {
@@ -277,23 +312,23 @@ function NewAppointment({
   );
 }
 
-function DayView({ appointments, current, onMove }: {
+function DayView({ appointments, current, onMove, canManage, onSelect }: {
   appointments: Appointment[]; current: Date;
   onMove: (id: string, date: string, time?: string) => void;
-}) {
+} & CalendarActions) {
   const date = format(current, "yyyy-MM-dd");
   return (
-    <div className="grid min-w-[700px] grid-cols-[70px_1fr]">
+    <div className="grid grid-cols-[64px_minmax(0,1fr)]">
       {timeSlots.map((time) => (
         <div key={time} className="contents">
-          <div className="border-r border-t px-3 py-5 text-right text-[10px] font-semibold text-muted-foreground">
+          <div className="border-e border-t px-3 py-5 text-end text-[10px] font-semibold text-muted-foreground">
             {slotLabel(time)}
           </div>
-          <DropCell date={date} time={time} onMove={onMove} className="relative min-h-[60px] border-t p-1.5">
+          <DropCell date={date} time={time} onMove={onMove} className="relative min-h-[60px] space-y-2 border-t p-2">
             {appointments
               .filter((appointment) => appointment.date === date && appointmentSlot(appointment.time) === time)
               .map((appt) => (
-                <DraggableAppointment key={appt.id} appointment={appt} />
+                <DraggableAppointment key={appt.id} appointment={appt} canManage={canManage} onSelect={onSelect} />
               ))}
           </DropCell>
         </div>
@@ -305,23 +340,23 @@ function DayView({ appointments, current, onMove }: {
 function WeekView({
   appointments,
   current,
-  onMove,
+  onMove, canManage, onSelect,
 }: {
   appointments: Appointment[];
   current: Date;
   onMove: (id: string, date: string, time?: string) => void;
-}) {
+} & CalendarActions) {
   const days = eachDayOfInterval({
     start: startOfWeek(current, { weekStartsOn: 1 }),
     end: endOfWeek(current, { weekStartsOn: 1 }),
   });
   return (
     <div className="grid min-w-[980px] grid-cols-[64px_repeat(7,minmax(120px,1fr))]">
-      <div className="border-b border-r bg-slate-50" />
+      <div className="border-b border-e bg-slate-50" />
         {days.map((day) => (
           <div
             key={day.toISOString()}
-            className={cn("border-b border-r px-2 py-3 text-center", format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") && "bg-primary/5")}
+            className={cn("border-b border-e px-2 py-3 text-center", format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") && "bg-primary/5")}
           >
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {format(day, "EEE")}
@@ -338,12 +373,12 @@ function WeekView({
           </div>
         ))}
       {timeSlots.flatMap((time) => [
-        <div key={`label-${time}`} className="border-b border-r px-2 py-5 text-end text-[10px] font-semibold text-muted-foreground">{slotLabel(time)}</div>,
+        <div key={`label-${time}`} className="border-b border-e px-2 py-5 text-end text-[10px] font-semibold text-muted-foreground">{slotLabel(time)}</div>,
         ...days.map((day) => {
           const date = format(day, "yyyy-MM-dd");
-          return <DropCell key={`${date}-${time}`} date={date} time={time} onMove={onMove} className="min-h-[60px] border-b border-r p-1.5">
+          return <DropCell key={`${date}-${time}`} date={date} time={time} onMove={onMove} className="min-h-[60px] space-y-2 border-b border-e p-1.5">
             {appointments.filter((a) => a.date === date && appointmentSlot(a.time) === time)
-              .map((appt) => <DraggableAppointment key={appt.id} appointment={appt} compact />)}
+              .map((appt) => <DraggableAppointment key={appt.id} appointment={appt} compact canManage={canManage} onSelect={onSelect} />)}
           </DropCell>;
         }),
       ])}
@@ -354,12 +389,12 @@ function WeekView({
 function MonthView({
   appointments,
   current,
-  onMove,
+  onMove, canManage, onSelect,
 }: {
   appointments: Appointment[];
   current: Date;
   onMove: (id: string, date: string, time?: string) => void;
-}) {
+} & CalendarActions) {
   const start = startOfWeek(startOfMonth(current), { weekStartsOn: 1 });
   const end = endOfWeek(endOfMonth(current), { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start, end });
@@ -387,7 +422,7 @@ function MonthView({
               date={format(day, "yyyy-MM-dd")}
               onMove={onMove}
               className={cn(
-                "min-h-28 border-b border-r p-2",
+                "min-h-28 border-b border-e p-2",
                 !inMonth && "bg-slate-50/70 text-slate-300",
               )}
             >
@@ -401,8 +436,8 @@ function MonthView({
                 {format(day, "d")}
               </span>
               <div className="mt-1 space-y-1">
-                {items.slice(0, 3).map((item) => (
-                  <DraggableAppointment key={item.id} appointment={item} compact />
+                {items.map((item) => (
+                  <DraggableAppointment key={item.id} appointment={item} compact canManage={canManage} onSelect={onSelect} />
                 ))}
               </div>
             </DropCell>
@@ -432,9 +467,11 @@ export function AppointmentsPage({
   onCreatePatient: (input: { name: string; phone: string; email: string; requestedTreatment: string; assignedDoctor: string }) => Promise<Patient | null>;
   onReschedule: (appointment: Appointment, date: string, time?: string) => Promise<boolean>;
 }) {
+  const { language } = useClinicPreferences();
   const [view, setView] = useState("week");
   const [current, setCurrent] = useState(new Date());
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Appointment | null>(null);
   const filtered = useMemo(
     () =>
       appointments.filter((a) =>
@@ -444,15 +481,21 @@ export function AppointmentsPage({
       ),
     [appointments, search],
   );
+  const rangeStart = format(view === "month" ? startOfWeek(startOfMonth(current), { weekStartsOn: 1 }) : view === "day" ? current : startOfWeek(current, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const rangeEnd = format(view === "month" ? endOfWeek(endOfMonth(current), { weekStartsOn: 1 }) : view === "day" ? current : endOfWeek(current, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const visible = filtered.filter((appointment) => appointment.date >= rangeStart && appointment.date <= rangeEnd).sort((a, b) => a.date.localeCompare(b.date) || appointmentSlot(a.time).localeCompare(appointmentSlot(b.time)));
+  const outsideHours = visible.filter((appointment) => !timeSlots.includes(appointmentSlot(appointment.time)));
+  const dateLabel = (date: Date, options: Intl.DateTimeFormatOptions) => date.toLocaleDateString(language === "ar" ? "ar-IQ" : "en-US", options);
   const step = (n: number) =>
     setCurrent((old) =>
       view === "day"
         ? addDays(old, n)
-        : view === "week"
+        : view === "week" || view === "agenda"
           ? addDays(old, n * 7)
           : new Date(old.getFullYear(), old.getMonth() + n, 1),
     );
   const move = async (id: string, date: string, time?: string) => {
+    if (!canManage) return;
     const appointment = appointments.find((candidate) => candidate.id === id);
     if (!appointment) return;
     if (appointment.status === "Completed" || appointment.status === "Cancelled") {
@@ -464,9 +507,9 @@ export function AppointmentsPage({
   };
   return (
     <div className="space-y-5">
-      <FilterBar className="justify-between xl:flex-row">
+      <FilterBar className="justify-between sm:flex-col sm:items-stretch 2xl:flex-row 2xl:items-center">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => step(-1)}>
+          <Button variant="outline" size="icon" aria-label="Previous period" onClick={() => step(-1)}>
             <ChevronLeft />
           </Button>
           <Button
@@ -475,15 +518,15 @@ export function AppointmentsPage({
           >
             Today
           </Button>
-          <Button variant="outline" size="icon" onClick={() => step(1)}>
+          <Button variant="outline" size="icon" aria-label="Next period" onClick={() => step(1)}>
             <ChevronRight />
           </Button>
           <h2 className="ms-1 text-sm font-bold">
             {view === "month"
-              ? format(current, "MMMM yyyy")
+              ? dateLabel(current, {month: "long", year: "numeric"})
               : view === "day"
-                ? format(current, "EEEE, MMMM d")
-                : `${format(startOfWeek(current, { weekStartsOn: 1 }), "MMM d")} – ${format(endOfWeek(current, { weekStartsOn: 1 }), "MMM d, yyyy")}`}
+                ? dateLabel(current, {weekday: "long", month: "long", day: "numeric"})
+                : `${dateLabel(startOfWeek(current, { weekStartsOn: 1 }), {month: "short", day: "numeric"})} – ${dateLabel(endOfWeek(current, { weekStartsOn: 1 }), {month: "short", day: "numeric", year: "numeric"})}`}
           </h2>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -501,48 +544,43 @@ export function AppointmentsPage({
               <TabsTrigger value="day">Day</TabsTrigger>
               <TabsTrigger value="week">Week</TabsTrigger>
               <TabsTrigger value="month">Month</TabsTrigger>
+              <TabsTrigger value="agenda">Agenda</TabsTrigger>
             </TabsList>
           </Tabs>
           {canManage && <NewAppointment patients={patients} procedures={procedures} doctors={doctors} onAdd={onAdd} onCreatePatient={onCreatePatient} />}
         </div>
       </FilterBar>
       <Card className="overflow-hidden">
-        <CardHeader className="flex-row items-center justify-between border-b">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 border-b bg-muted/25">
           <div>
             <CardTitle>Clinic calendar</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
-              {filtered.length} scheduled visits · 3 treatment rooms
+              <span>Visits in this view</span> · {visible.length}
             </p>
           </div>
-          <div className="hidden items-center gap-4 text-[10px] font-medium text-muted-foreground sm:flex">
-            <span className="flex items-center gap-1.5">
-              <i className="size-2 rounded-full bg-primary" />
-              Dr. Chen
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i className="size-2 rounded-full bg-violet-500" />
-              Dr. Wilson
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i className="size-2 rounded-full bg-sky-500" />
-              Dr. Kim
-            </span>
-          </div>
+          <Badge variant="outline"><CalendarClock className="size-3.5" /><span>Choose a visit to see details</span></Badge>
         </CardHeader>
         <div className="overflow-x-auto">
-          {view === "day" ? (
-            <DayView appointments={filtered} current={current} onMove={move} />
+          {view === "agenda" ? (
+            <div className="space-y-5 p-4 sm:p-6">
+              {!visible.length && <EmptyState icon={CalendarClock} title="A little breathing room" description="No appointments match this week. Try another date or clear your search." />}
+              {[...new Set(visible.map((appointment) => appointment.date))].map((date) => <section key={date}><h3 className="mb-3 text-sm font-semibold">{dateLabel(new Date(`${date}T12:00:00`), {weekday: "long", month: "short", day: "numeric"})}</h3><div className="grid gap-3 lg:grid-cols-2">{visible.filter((appointment) => appointment.date === date).map((appointment) => <DraggableAppointment key={appointment.id} appointment={appointment} canManage={canManage} onSelect={setSelected} />)}</div></section>)}
+            </div>
+          ) : view === "day" ? (
+            <DayView appointments={filtered} current={current} onMove={move} canManage={canManage} onSelect={setSelected} />
           ) : view === "week" ? (
-            <WeekView appointments={filtered} current={current} onMove={move} />
+            <WeekView appointments={filtered} current={current} onMove={move} canManage={canManage} onSelect={setSelected} />
           ) : (
-            <MonthView appointments={filtered} current={current} onMove={move} />
+            <MonthView appointments={filtered} current={current} onMove={move} canManage={canManage} onSelect={setSelected} />
           )}
         </div>
       </Card>
+      {(view === "day" || view === "week") && outsideHours.length > 0 && <section className="space-y-3"><h3 className="text-sm font-semibold">Outside calendar hours</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{outsideHours.map((appointment) => <DraggableAppointment key={appointment.id} appointment={appointment} canManage={canManage} onSelect={setSelected} />)}</div></section>}
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <CalendarClock className="size-4" />
-        Drag an appointment to another day or 30-minute time slot. Simultaneous visits remain separate; completed and cancelled visits stay locked.
+        <span>{canManage ? "Select a visit to review or reschedule it. You can also drag cards between time slots." : "Select a visit to review its details."}</span>
       </p>
+      {selected && <AppointmentDetails key={selected.id} appointment={selected} canManage={canManage} onClose={() => setSelected(null)} onSave={onReschedule} />}
     </div>
   );
 }

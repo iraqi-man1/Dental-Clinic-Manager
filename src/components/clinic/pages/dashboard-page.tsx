@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarCheck2,
   CircleDollarSign,
+  CalendarDays,
   CreditCard,
   Stethoscope,
   Users,
@@ -138,7 +139,7 @@ export function DashboardPage({
   ].slice(0, 4);
   return (
     <div className="space-y-6">
-      <section className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-5 xl:grid-cols-3">
+      <section className="dashboard-stats grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {stats.map((stat, index) => (
           <StatCard
             key={stat.label}
@@ -147,11 +148,11 @@ export function DashboardPage({
             note={stat.note}
             icon={stat.icon}
             tone={(index === 2 ? "success" : index === 3 ? "warning" : index === 4 ? "danger" : index === 1 ? "info" : "accent")}
-            className={cn(index === 0 && "border-primary/20 bg-accent/45", "[&_[data-slot=card-content]]:p-5")}
+            className={cn(index === 0 && "stat-featured", "[&_[data-slot=card-content]]:p-5")}
           />
         ))}
       </section>
-      <section className="grid gap-5 xl:grid-cols-[1.1fr_1fr]">
+      <section className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">
         <Card className="min-w-0 xl:order-2">
           <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-4">
             <div>
@@ -168,7 +169,7 @@ export function DashboardPage({
                 <p className="text-sm text-muted-foreground">Total collected</p>
                 <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">{formatMoney(revenue)}</p>
               </div>
-              <Badge variant="success">{payments.length ? `${payments.length} live invoices` : "No financial activity yet"}</Badge>
+              <Badge variant="success">{payments.length ? <>{payments.length} <span>live invoices</span></> : "No financial activity yet"}</Badge>
             </div>
             <div className="h-[225px] min-w-0 w-full" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
@@ -248,7 +249,7 @@ export function DashboardPage({
                 type="button"
                 variant="ghost"
                 onClick={() => onNavigate("appointments")}
-                className="h-auto w-full justify-start gap-3 rounded-lg border border-border/70 p-3 text-start hover:border-primary/30 hover:bg-accent/40"
+                className="h-auto w-full justify-start gap-3 whitespace-normal rounded-lg border border-border/70 p-3.5 text-start hover:border-primary/30 hover:bg-accent/40"
               >
                 <div className="w-14 shrink-0">
                   <p className="text-xs font-bold text-slate-800">
@@ -285,7 +286,7 @@ export function DashboardPage({
               <EmptyState
                 icon={CalendarCheck2}
                 title="No appointments today"
-                description="The day is clear. New bookings will appear here immediately."
+                action={<Button variant="outline" onClick={() => onNavigate("appointments")}><CalendarDays />View calendar</Button>}
                 className="min-h-64 border-0 bg-transparent p-5"
               />
             )}

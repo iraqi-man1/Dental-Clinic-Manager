@@ -26,54 +26,68 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setMessage("");
-    const f = new FormData(e.currentTarget),
-      email = String(f.get("email")),
-      password = String(f.get("password")),
-      supabase = createClient();
-    if (!supabase) {
-      setMessage(
-        "Supabase credentials are not configured. Use the demo workspace instead.",
-      );
-      setLoading(false);
-      return;
-    }
-    if (mode === "reset") {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${location.origin}/auth/callback?next=/update-password`,
-      });
-      setMessage(error ? error.message : "Check your email for a secure password-reset link.");
-    } else if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) setMessage(error.message);
-      else {
-        const { data: membership } = await supabase
+    try {
+      const f = new FormData(e.currentTarget),
+        email = String(f.get("email")),
+        password = String(f.get("password")),
+        supabase = createClient();
+      if (!supabase) {
+        setMessage(
+          "Supabase credentials are not configured. Use the demo workspace instead.",
+        );
+        return;
+      }
+      if (mode === "reset") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${location.origin}/auth/callback?next=/update-password`,
+        });
+        setMessage(error ? error.message : "Check your email for a secure password-reset link.");
+        return;
+      }
+      if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) {
+          setMessage(error.message);
+          return;
+        }
+        const { data: membership, error: membershipError } = await supabase
           .from("clinic_members")
           .select("clinic_id")
           .limit(1)
           .maybeSingle();
+        if (membershipError) {
+          setMessage("Could not open your clinic workspace. Please try again.");
+          return;
+        }
         if (!membership) {
-          const user = (await supabase.auth.getUser()).data.user;
-          const clinicName = user?.user_metadata?.clinic_name;
-          const fullName = user?.user_metadata?.full_name ?? "Clinic owner";
-          if (typeof clinicName === "string" && clinicName.trim()) {
-            const slug = `${clinicName
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
-            await supabase.rpc("create_clinic", {
-              clinic_name: clinicName,
-              clinic_slug: slug,
-              member_name: fullName,
-            });
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          const clinicName = userData.user?.user_metadata?.clinic_name;
+          const fullName = userData.user?.user_metadata?.full_name ?? "Clinic owner";
+          if (userError || typeof clinicName !== "string" || !clinicName.trim()) {
+            setMessage("Your account is not linked to a clinic workspace.");
+            return;
+          }
+          const slug = `${clinicName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
+          const { error: clinicError } = await supabase.rpc("create_clinic", {
+            clinic_name: clinicName,
+            clinic_slug: slug,
+            member_name: fullName,
+          });
+          if (clinicError) {
+            setMessage("Could not open your clinic workspace. Please try again.");
+            return;
           }
         }
-        router.push("/");
-        router.refresh();
+        window.location.assign("/");
+        return;
       }
-    } else {
+
       const fullName = String(f.get("name")),
         clinic = String(f.get("clinic"));
       const { data, error } = await supabase.auth.signUp({
@@ -84,25 +98,35 @@ export default function LoginPage() {
           emailRedirectTo: `${location.origin}/auth/callback`,
         },
       });
-      if (error) setMessage(error.message);
-      else if (data.session) {
-        const slug = `${clinic
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
-        await supabase.rpc("create_clinic", {
-          clinic_name: clinic,
-          clinic_slug: slug,
-          member_name: fullName,
-        });
-        router.push("/");
-        router.refresh();
-      } else
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+      if (!data.session) {
         setMessage(
           "Check your email to confirm your account, then sign in to create your clinic workspace.",
         );
+        return;
+      }
+      const slug = `${clinic
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
+      const { error: clinicError } = await supabase.rpc("create_clinic", {
+        clinic_name: clinic,
+        clinic_slug: slug,
+        member_name: fullName,
+      });
+      if (clinicError) {
+        setMessage("Could not open your clinic workspace. Please try again.");
+        return;
+      }
+      window.location.assign("/");
+    } catch {
+      setMessage("Could not connect to the authentication service. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
@@ -114,7 +138,7 @@ export default function LoginPage() {
             B
           </div>
           <div>
-            <p className="font-bold">BrightSmile</p>
+            <p className="app-brand text-3xl" data-no-translate>نرجس</p>
             <p className="text-xs text-white/60">Dental Studio</p>
           </div>
         </div>
@@ -160,7 +184,7 @@ export default function LoginPage() {
               {mode === "login" ? "Welcome back" : mode === "reset" ? "Reset your password" : "Start your clinic workspace"}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {mode === "login" ? "Sign in to manage today’s care." : mode === "reset" ? "We’ll email you a secure recovery link." : "Create your secure BrightSmile account."}
+              {mode === "login" ? "Sign in to manage today’s care." : mode === "reset" ? "We’ll email you a secure recovery link." : "Create your account."}
             </p>
             <form className="mt-7 space-y-4" onSubmit={submit}>
               {mode === "signup" && (
@@ -180,7 +204,7 @@ export default function LoginPage() {
                       name="clinic"
                       required
                       className="mt-1.5"
-                      placeholder="BrightSmile Dental Studio"
+                      placeholder="Clinic name"
                     />
                   </label>
                 </>
@@ -241,7 +265,7 @@ export default function LoginPage() {
             >Forgot password?</Button>}
             <div className="my-6 h-px bg-border" />
             <p className="text-center text-sm text-muted-foreground">
-              {mode === "login" ? "New to BrightSmile?" : "Already have an account?"}{" "}
+              {mode === "login" ? "New here?" : "Already have an account?"}{" "}
               <Button
                 type="button"
                 variant="ghost"

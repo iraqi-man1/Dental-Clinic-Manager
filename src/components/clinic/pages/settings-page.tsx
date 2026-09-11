@@ -7,8 +7,6 @@ import {
   Bell,
   Building2,
   Check,
-  CreditCard,
-  Database,
   Languages,
   LockKeyhole,
   Save,
@@ -20,7 +18,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
-import { cn } from "@/lib/utils";
 import type { ClinicInfo } from "@/lib/types";
 
 function Toggle({
@@ -46,8 +43,6 @@ const sections = [
   { key: "localization", label: "Application language", icon: Languages },
   { key: "notifications", label: "Notifications", icon: Bell },
   { key: "security", label: "Security & access", icon: ShieldCheck },
-  { key: "billing", label: "Billing & plan", icon: CreditCard },
-  { key: "data", label: "Data & integrations", icon: Database },
 ];
 
 export function SettingsPage({ clinic, onSaveClinic }: {
@@ -73,7 +68,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
   return (
     <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
       <Card className="h-fit">
-        <CardContent className="p-2">
+        <CardContent className="flex flex-col gap-1 p-3 sm:p-3">
           {sections.map((s) => {
             const Icon = s.icon;
             return (
@@ -81,7 +76,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
                 key={s.key}
                 onClick={() => setActive(s.key)}
                 variant={active === s.key ? "default" : "ghost"}
-                className="w-full justify-start"
+                className="h-auto min-h-11 w-full justify-start gap-3 whitespace-normal px-3 py-3 text-start"
               >
                 <Icon className="size-4" />
                 {s.label}
@@ -90,35 +85,14 @@ export function SettingsPage({ clinic, onSaveClinic }: {
           })}
         </CardContent>
       </Card>
-      <div>
+      <div className="min-w-0">
         {active === "clinic" && (
           <Card>
             <CardHeader>
               <CardTitle>Clinic profile</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Information shown on receipts, reminders, and patient
-                communications.
-              </p>
             </CardHeader>
             <CardContent>
               <form onSubmit={saveClinic} className="space-y-5">
-              <div className="flex items-center gap-4">
-                <div className="grid size-20 place-items-center rounded-2xl bg-primary text-3xl font-black text-white">
-                  B
-                </div>
-                <div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => toast.success("Logo uploader opened")}
-                  >
-                    Change logo
-                  </Button>
-                  <p className="mt-2 text-[10px] text-muted-foreground">
-                    PNG or SVG · max 2 MB
-                  </p>
-                </div>
-              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {[
                   ["Clinic name", "name", clinic.name],
@@ -147,9 +121,6 @@ export function SettingsPage({ clinic, onSaveClinic }: {
           <Card>
             <CardHeader>
               <CardTitle>Application language</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Choose the language used throughout this clinic workspace.
-              </p>
             </CardHeader>
             <CardContent className="space-y-5">
               <label className="block max-w-md text-xs font-semibold">
@@ -187,9 +158,6 @@ export function SettingsPage({ clinic, onSaveClinic }: {
           <Card>
             <CardHeader>
               <CardTitle>Notification preferences</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Choose how the clinic and patients receive updates.
-              </p>
             </CardHeader>
             <CardContent className="divide-y">
               {[
@@ -240,9 +208,6 @@ export function SettingsPage({ clinic, onSaveClinic }: {
           <Card>
             <CardHeader>
               <CardTitle>Security & access</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Protect clinical data and control session behavior.
-              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4 rounded-2xl border p-4">
@@ -253,10 +218,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
                   <p className="text-sm font-semibold">
                     Multi-factor authentication
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Required for owners and administrators
-                  </p>
-                </div>
+                    </div>
                 <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
                   <Check className="size-4" />
                   Enabled
@@ -276,76 +238,7 @@ export function SettingsPage({ clinic, onSaveClinic }: {
             </CardContent>
           </Card>
         )}
-        {active === "billing" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Billing & subscription</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-2xl bg-gradient-to-br from-primary to-[#087a70] p-6 text-white">
-                <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
-                  Professional plan
-                </p>
-                <p className="mt-2 text-3xl font-bold">
-                  $149{" "}
-                  <span className="text-sm font-medium text-white/70">
-                    / month
-                  </span>
-                </p>
-                <p className="mt-3 max-w-lg text-sm text-white/80">
-                  Unlimited patients, up to 15 staff, clinical storage,
-                  reporting, realtime updates, and priority support.
-                </p>
-                <Button
-                  className="mt-5 bg-white text-primary hover:bg-white/90"
-                  onClick={() => toast.success("Billing portal opened")}
-                >
-                  Manage subscription
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        {active === "data" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Data & integrations</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Database status and connected clinic services.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                [
-                  "Supabase database",
-                  "Connected · Realtime enabled",
-                  "bg-emerald-500",
-                ],
-                [
-                  "Private clinical storage",
-                  "Configured · RLS protected",
-                  "bg-emerald-500",
-                ],
-                ["Insurance clearinghouse", "Not connected", "bg-slate-300"],
-                ["Accounting export", "Ready", "bg-emerald-500"],
-              ].map((x) => (
-                <div
-                  key={x[0]}
-                  className="flex items-center gap-3 rounded-xl border p-4"
-                >
-                  <span className={cn("size-2.5 rounded-full", x[2])} />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold">{x[0]}</p>
-                    <p className="text-xs text-muted-foreground">{x[1]}</p>
-                  </div>
-                  <Button size="sm" variant="outline">
-                    Configure
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+
       </div>
     </div>
   );

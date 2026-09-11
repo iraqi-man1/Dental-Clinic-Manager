@@ -35,7 +35,7 @@ export function PageHeader({
   status?: ReactNode;
 }) {
   return (
-    <header className="mb-7 flex flex-col justify-between gap-4 lg:mb-8 lg:flex-row lg:items-end">
+    <header className="page-heading mb-6 flex flex-col justify-between gap-4 lg:mb-7 lg:flex-row lg:items-end">
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold leading-9 tracking-[-0.035em] text-foreground sm:text-3xl">
           {title}
@@ -116,7 +116,7 @@ export function StatCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("overflow-hidden bg-card", className)}>
+    <Card className={cn("stat-card min-w-0 overflow-hidden bg-card", className)}>
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium leading-5 text-muted-foreground">
@@ -131,7 +131,7 @@ export function StatCard({
             <Icon className="size-[18px]" />
           </div>
         </div>
-        <p className="mt-3 text-[1.875rem] font-semibold leading-9 tracking-[-0.04em] text-foreground tabular-nums">
+        <p className="stat-value mt-3 break-words text-[1.875rem] font-semibold leading-9 tracking-[-0.04em] text-foreground tabular-nums">
           {value}
         </p>
         {note || accessory ? (
@@ -196,7 +196,7 @@ export function EmptyState({
 }: {
   icon: ComponentType<{ className?: string }>;
   title: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   action?: ReactNode;
   className?: string;
 }) {
@@ -212,9 +212,9 @@ export function EmptyState({
       </div>
       <div className="mt-4 max-w-sm">
         <h3 className="text-sm font-bold text-foreground">{title}</h3>
-        <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+        {description && <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
           {description}
-        </p>
+        </p>}
       </div>
       {action ? <div className="mt-5">{action}</div> : null}
     </div>

@@ -71,8 +71,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Project size snapshot
 
-- Maintained code files: **58**
-- Total lines of code: **11,792**
+- Maintained code files: **65**
+- Total lines of code: **12,810**
 - Counted file types: `.ts`, `.tsx`, `.css`, `.sql`, `.mjs`, `.json`, and `.toml`.
-- Excluded from the count: `node_modules/`, `.next/`, `package-lock.json`, `tsconfig.tsbuildinfo`, documentation, and generated/cache files.
-- Snapshot date: **2026-09-03**. Recalculate these values whenever project files materially change.
+- Excluded from the count: `node_modules/`, `.next/`, `package-lock.json`, `tsconfig.tsbuildinfo`, `next-env.d.ts`, documentation, and generated/cache files.
+- Snapshot date: **2026-09-11**. Recalculate these values whenever project files materially change.
