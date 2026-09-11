@@ -793,7 +793,6 @@ export function ClinicApp() {
         <main key={displayActive} className="page-enter mx-auto min-w-0 max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <PageHeader
             title={pageMeta[displayActive].title}
-            
             status={
               <div className="flex items-center gap-3">
                 <span className="hidden items-center gap-2 text-xs text-muted-foreground sm:inline-flex"><CalendarDays className="size-4" />{new Date().toLocaleDateString(language === "ar" ? "ar-IQ" : "en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
