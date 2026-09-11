@@ -11,8 +11,6 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@heroui/react@3.2.4",
-        "npm:@heroui/styles@3.2.4",
         "npm:@radix-ui/react-avatar@1.1.10",
         "npm:@radix-ui/react-dialog@1.1.15",
         "npm:@radix-ui/react-dropdown-menu@2.1.16",
@@ -34,6 +32,8 @@
         "npm:date-fns@4.4.0",
         "npm:eslint-config-next@16.3.3",
         "npm:eslint@9.39.1",
+        "npm:html-to-image@1.11.13",
+        "npm:jspdf@4.2.1",
         "npm:lucide-react@1.34.0",
         "npm:next@16.3.3",
         "npm:react-dom@19.2.8",
