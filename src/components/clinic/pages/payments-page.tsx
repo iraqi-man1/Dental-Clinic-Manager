@@ -59,6 +59,9 @@ const TOUCH_ICON = "size-11 sm:size-10";
 
 const toCents = (value: number) => Math.round(value * 100);
 
+/** Payment dates are formatted from the `paidAt` instant in the clinic zone and the active locale. */
+const PAYMENT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+
 /** Balance still owed on an invoice, derived from the loader's totals. The loader supplies the status. */
 const remainingOf = (payment: Payment) => Math.max(0, payment.total - payment.discount - payment.paid);
 
@@ -151,7 +154,7 @@ function RecordPaymentDialog({
             {t("Apply a partial or full payment to an appointment balance.")}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} noValidate className="space-y-4">
           <label className="block text-xs font-semibold">
             {t("Patient · appointment treatment")}
             <Select
@@ -195,8 +198,6 @@ function RecordPaymentDialog({
                 name="amount"
                 required
                 type="number"
-                min="0.01"
-                max={selected ? selectedRemaining : undefined}
                 step="0.01"
                 inputMode="decimal"
                 className={`mt-1.5 ${TOUCH_HEIGHT}`}
@@ -306,7 +307,7 @@ function ReversePaymentDialog({
             <dd className="mt-1 font-bold" data-no-translate>{payment.invoice}</dd>
           </div>
         </dl>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} noValidate className="space-y-4">
           <label className="block text-xs font-semibold">
             {t("Reason for reversal")}
             <Textarea
@@ -341,19 +342,25 @@ function ReversePaymentDialog({
 function Receipt({
   receipt,
   clinic,
+  timeZone,
   open,
   onOpenChange,
 }: {
   receipt: { payment: Payment; transaction?: PaymentReceipt } | null;
   clinic: { name: string; phone?: string; address?: Record<string, string> };
+  timeZone: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const { formatMoney, t } = useClinicPreferences();
+  const { formatDate, formatMoney, t } = useClinicPreferences();
   if (!receipt) return null;
   const { payment, transaction } = receipt;
   const displayClinic = transaction?.clinic?.name ? transaction.clinic : clinic;
   const remaining = transaction?.remaining ?? remainingOf(payment);
+  const paidAt = transaction?.paidAt ?? payment.paidAt;
+  const paidOn = paidAt
+    ? formatDate(paidAt, { timeZone, ...PAYMENT_DATE_OPTIONS })
+    : (transaction?.date ?? payment.date);
   const clinicLine = [displayClinic.phone, displayClinic.address?.street, displayClinic.address?.city]
     .filter(Boolean)
     .join(" · ");
@@ -384,7 +391,7 @@ function Receipt({
             </div>
             <div className="text-end">
               <p className="text-muted-foreground">{t("Payment date")}</p>
-              <p className="mt-1 font-bold" data-no-translate>{transaction?.date ?? payment.date}</p>
+              <p className="mt-1 font-bold">{paidOn}</p>
               <p className="mt-3 text-muted-foreground">{t("Method")}</p>
               <p className="mt-1 font-bold">{t(transaction?.method ?? payment.method)}</p>
             </div>
@@ -446,7 +453,7 @@ export function PaymentsPage({
   onAdd: (input: RecordPaymentInput) => Promise<boolean>;
   onReverse: (input: ReversePaymentInput) => Promise<boolean>;
 }) {
-  const { formatMoney, t } = useClinicPreferences();
+  const { formatDate, formatMoney, t } = useClinicPreferences();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("All");
   const [receipt, setReceipt] = useState<{ payment: Payment; transaction?: PaymentReceipt } | null>(null);
@@ -455,6 +462,9 @@ export function PaymentsPage({
   const canRecordPayment = RECORD_PAYMENT_ROLES.includes(role);
   const canReversePayment = REVERSE_PAYMENT_ROLES.includes(role);
   const timeZone = clinic.timezone ?? DEFAULT_CLINIC_TIME_ZONE;
+  // The English `date` label is a fallback for a record without an instant. Localized output uses `paidAt`.
+  const paymentDateText = (payment: Payment) =>
+    payment.paidAt ? formatDate(payment.paidAt, { timeZone, ...PAYMENT_DATE_OPTIONS }) : payment.date;
   const visible = useMemo(
     () =>
       payments.filter(
@@ -513,7 +523,7 @@ export function PaymentsPage({
           payment.invoice,
           payment.patientName,
           payment.treatment,
-          payment.date,
+          paymentDateText(payment),
           payment.total,
           payment.discount,
           payment.paid,
@@ -553,7 +563,7 @@ export function PaymentsPage({
         </div>
       ),
     },
-    { key: "date", label: t("Date"), render: (payment) => <span className="text-xs text-muted-foreground">{payment.date}</span> },
+    { key: "date", label: t("Date"), render: (payment) => <span className="text-xs text-muted-foreground">{paymentDateText(payment)}</span> },
     { key: "total", label: t("Total"), render: (payment) => <span className="text-sm font-semibold">{formatMoney(payment.total)}</span> },
     { key: "paid", label: t("Paid"), render: (payment) => <span className="text-sm font-semibold text-success">{formatMoney(payment.paid)}</span> },
     { key: "remaining", label: t("Remaining"), render: (payment) => <span className="text-sm font-semibold">{formatMoney(remainingOf(payment))}</span> },
@@ -670,6 +680,7 @@ export function PaymentsPage({
       <Receipt
         receipt={receipt}
         clinic={clinic}
+        timeZone={timeZone}
         open={Boolean(receipt)}
         onOpenChange={(v) => !v && setReceipt(null)}
       />

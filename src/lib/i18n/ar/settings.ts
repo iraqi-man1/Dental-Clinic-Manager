@@ -14,7 +14,7 @@ const ar: Record<string, string> = {
   "Address": "العنوان",
   "City & ZIP": "المدينة والرمز البريدي",
   "Time zone": "المنطقة الزمنية",
-  "Appointment times and today's date use this time zone. Default: {zone}": "تستخدم أوقات المواعيد وتاريخ اليوم هذه المنطقة الزمنية. الافتراضي: {zone}",
+  "Appointment times and today's date use this time zone. Default:": "تستخدم أوقات المواعيد وتاريخ اليوم هذه المنطقة الزمنية. الافتراضي:",
   "Choose a valid time zone.": "اختر منطقة زمنية صالحة.",
   "Save changes": "حفظ التغييرات",
   "Saving…": "جارٍ الحفظ…",

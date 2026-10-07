@@ -25,13 +25,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { DEFAULT_CLINIC_TIME_ZONE, clinicTodayKey } from "@/lib/clinic-time";
+import { DEFAULT_CLINIC_TIME_ZONE, clinicDateKey, clinicTodayKey } from "@/lib/clinic-time";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
 import type { Appointment, NavKey, Patient, Payment, TreatmentSession } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 import { EmptyState, StatCard } from "@/components/clinic/app-ui";
 
-const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const STAT_TONES = ["accent", "info", "success", "warning", "danger"] as const;
 
 const appointmentStatus = (status: Appointment["status"]) =>
@@ -45,21 +44,6 @@ const appointmentStatus = (status: Appointment["status"]) =>
 
 const isOpenSession = (session: TreatmentSession) =>
   session.status !== "completed" && session.status !== "cancelled";
-
-/**
- * Payment dates reach the dashboard as display labels from the loader (for example "Aug 27, 2026"),
- * so they are read back only to group by month and to format them again in the active locale.
- * Returns a YYYY-MM-DD calendar key, or null when the label is not a recognizable date.
- * Appointments never take this path: they carry the `startsAt` instant.
- */
-function paymentDateKey(value: string): string | null {
-  if (DATE_KEY_PATTERN.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  return `${parsed.getFullYear()}-${month}-${day}`;
-}
 
 /** Full amount on tablet and desktop, compact amount on phones so large totals fit a two-column grid. */
 function ResponsiveMoney({ full, compact }: { full: string; compact: string }) {
@@ -96,12 +80,11 @@ export function DashboardPage({
     count === 1 ? t(one) : t(many, { count });
   const appointmentTime = (appointment: Appointment) =>
     formatTime(appointment.startsAt, { timeZone }) || appointment.time;
-  const formatPaymentDate = (value: string) => {
-    const key = paymentDateKey(value);
-    return key
-      ? formatDate(key, { timeZone, month: "short", day: "numeric", year: "numeric" })
-      : value;
-  };
+  // Payments carry the `paidAt` instant. Their English `date` label is never parsed back into a date.
+  const formatPaymentDate = (payment: Payment) =>
+    payment.paidAt
+      ? formatDate(payment.paidAt, { timeZone, month: "short", day: "numeric", year: "numeric" })
+      : payment.date;
 
   const today = appointments
     .filter((appointment) => appointment.date === todayKey)
@@ -121,9 +104,10 @@ export function DashboardPage({
 
   const monthTotals = new Map<string, number>();
   for (const payment of payments) {
-    const key = paymentDateKey(payment.date);
-    if (!key) continue;
-    const month = key.slice(0, 7);
+    // Grouping uses the clinic-local calendar day of the payment instant.
+    const dateKey = payment.paidAt ? clinicDateKey(payment.paidAt, timeZone) : "";
+    if (!dateKey) continue;
+    const month = dateKey.slice(0, 7);
     monthTotals.set(month, (monthTotals.get(month) ?? 0) + payment.paid);
   }
   const months = [...monthTotals.keys()].sort();
@@ -205,7 +189,7 @@ export function DashboardPage({
         icon: CreditCard,
         title: t("Payment received"),
         detail: `${payment.patientName} · ${formatMoney(payment.lastPaymentAmount ?? payment.paid)}`,
-        time: formatPaymentDate(payment.date),
+        time: formatPaymentDate(payment),
         bg: "bg-emerald-50 text-emerald-700",
       })),
     ...today.slice(0, 2).map((appointment) => ({

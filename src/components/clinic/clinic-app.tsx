@@ -285,8 +285,8 @@ function WorkstationSwitcher({ members, currentUserId, configured, onDemoSwitch 
     location.reload();
   };
   return <div className="relative block">
-    <Button variant="ghost" onClick={() => setMenuOpen((open) => !open)} className="h-auto gap-2 rounded-xl p-1.5 pe-2" aria-label={t("Switch workstation user")}>
-      <Users className="size-4" /><ChevronDown className="size-3.5 text-muted-foreground" />
+    <Button variant="ghost" onClick={() => setMenuOpen((open) => !open)} className="h-auto gap-2 rounded-xl p-1.5 sm:pe-2 max-sm:min-w-10 max-sm:justify-center" aria-label={t("Switch workstation user")}>
+      <Users className="size-4" /><ChevronDown className="hidden size-3.5 text-muted-foreground sm:block" />
     </Button>
     {menuOpen && <div className="absolute end-0 top-12 z-50 w-72 rounded-2xl border border-border bg-overlay p-2 shadow-overlay"><p className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("Workstation user")}</p>{members.filter((member) => member.status === "active" && member.email && member.userId).map((member) => <Button key={member.id} variant="ghost" onClick={() => select(member)} className="h-auto min-h-11 w-full justify-start gap-3 rounded-xl px-3 py-2.5 text-start"><Avatar className="size-8"><AvatarFallback data-no-translate>{member.fullName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2)}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold" data-no-translate>{member.fullName}</span><span className="block text-[10px] text-muted-foreground">{t(roleLabels[member.role])}</span></span>{member.userId === currentUserId && <span className="text-[10px] font-bold text-success">{t("Current")}</span>}</Button>)}</div>}
     <Dialog open={Boolean(target)} onOpenChange={(open) => !open && setTarget(null)}><DialogContent><DialogHeader><DialogTitle>{t("Switch to {name}", { name: target?.fullName ?? "" })}</DialogTitle><DialogDescription>{t("Enter this user’s password. Returning to Admin mode requires the Admin account password.")}</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-4"><label className="block text-xs font-semibold">{t("Password")}<Input name="password" type="password" minLength={configured ? 8 : 1} required className="mt-1.5" autoFocus /></label><DialogFooter><Button type="button" variant="outline" onClick={() => setTarget(null)}>{t("Cancel")}</Button><Button disabled={saving}>{saving ? t("Switching…") : t("Switch user")}</Button></DialogFooter></form></DialogContent></Dialog>
@@ -925,7 +925,7 @@ export function ClinicApp() {
           sidebarPinned ? "desktop-sidebar-offset-expanded" : "desktop-sidebar-offset-collapsed",
         )}
       >
-        <header className="clinic-topbar sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur-xl sm:gap-5 sm:px-6 lg:px-8">
+        <header className="clinic-topbar sticky top-0 z-20 flex h-[72px] items-center gap-2 border-b border-border bg-card/95 px-4 backdrop-blur-xl sm:gap-5 sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="icon"
@@ -942,8 +942,8 @@ export function ClinicApp() {
           </div>
           <HeaderSearch patients={patientList} onSelectPatient={openPatientFromSearch} />
           <div className="ms-auto flex items-center gap-1 sm:gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setLanguage(language === "en" ? "ar" : "en")} aria-label={language === "en" ? "العربية" : "English"} className="gap-1.5 px-2 text-muted-foreground" data-no-translate>
-              <Languages className="size-4" /><span className="text-xs">{language === "en" ? "العربية" : "English"}</span>
+            <Button variant="ghost" size="sm" onClick={() => setLanguage(language === "en" ? "ar" : "en")} aria-label={language === "en" ? "العربية" : "English"} className="gap-1.5 px-2 text-muted-foreground max-sm:min-w-10" data-no-translate>
+              <Languages className="size-4" /><span className="hidden text-xs sm:block">{language === "en" ? "العربية" : "English"}</span>
             </Button>
             <div className="relative">
               <Button
@@ -952,7 +952,7 @@ export function ClinicApp() {
                 onClick={() => { setNotificationsOpen((v) => !v); markNotificationsRead(); }}
                 aria-expanded={notificationsOpen}
                 aria-label={t("Notifications")}
-                className="relative"
+                className="relative max-sm:min-w-10"
               >
                 <Bell />
                 {hasUnreadNotifications && <span className="absolute end-2 top-2 size-2 rounded-full border-2 border-white bg-rose-500" />}
@@ -1102,7 +1102,7 @@ export function ClinicApp() {
               clinic={clinicInfo}
             />
           )}
-          {displayActive === "reports" && <ReportsPage payments={paymentList} patients={patientList} appointments={appointmentList} />}
+          {displayActive === "reports" && <ReportsPage payments={paymentList} patients={patientList} appointments={appointmentList} timeZone={timeZone} />}
           {displayActive === "settings" && <SettingsPage clinic={clinicInfo} onSaveClinic={saveClinicProfile} role={role} />}
             </>
           )}

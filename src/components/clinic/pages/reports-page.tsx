@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useClinicPreferences } from "@/lib/clinic-preferences";
-import { DEFAULT_CLINIC_TIME_ZONE, clinicTodayKey } from "@/lib/clinic-time";
+import { DEFAULT_CLINIC_TIME_ZONE, clinicDateKey, clinicTodayKey } from "@/lib/clinic-time";
 import type { Appointment, Patient, Payment } from "@/lib/types";
 import {
   DataTable,
@@ -28,7 +28,6 @@ import {
 } from "@/components/clinic/app-ui";
 
 const CHART_COLORS = ["#0f9f8f", "#6d5dfc", "#0ea5e9", "#f59e0b", "#e55f7c"];
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const PATIENT_STATUSES = ["Active", "Inactive"] as const;
 // Touch targets are 44px on phones and the desktop size from the sm breakpoint.
 const TOUCH_HEIGHT = "h-11 sm:h-10";
@@ -40,25 +39,19 @@ function csvCell(value: string | number) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-/**
- * Payment dates are clinic display labels in en-US, such as "Oct 7, 2026".
- * The month is read from that label, and the result is null when the label has another shape.
- */
-function monthOfPaymentLabel(label: string): { key: string; sortKey: number; year: number; month: number } | null {
-  const match = /^([A-Za-z]{3})[A-Za-z]*\.?\s+\d{1,2},?\s+(\d{4})$/.exec(label.trim());
-  if (!match) return null;
-  const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === match[1].toLowerCase());
-  if (month < 0) return null;
-  const year = Number(match[2]);
-  return { key: `${year}-${month}`, sortKey: year * 12 + month, year, month };
-}
-
 type ProviderRow = { name: string; production: number; patients: Set<string>; total: number; completed: number };
 
-export function ReportsPage({ payments, patients, appointments }: {
+export function ReportsPage({ payments, patients, appointments, timeZone = DEFAULT_CLINIC_TIME_ZONE }: {
   payments: Payment[]; patients: Patient[]; appointments: Appointment[];
+  /** Clinic time zone for month grouping and labels. Defaults to the clinic default zone. */
+  timeZone?: string;
 }) {
   const { formatCompactMoney, formatDate, formatMoney, t } = useClinicPreferences();
+  // Payments carry the `paidAt` instant. The English `date` label is kept for the export fallback only.
+  const paymentDate = (payment: Payment) =>
+    payment.paidAt
+      ? formatDate(payment.paidAt, { timeZone, month: "short", day: "numeric", year: "numeric" })
+      : payment.date;
   const grossProduction = payments.reduce((sum, payment) => sum + payment.total, 0);
   const netCollection = payments.reduce((sum, payment) => sum + payment.paid, 0);
   const collectionRate = grossProduction ? (netCollection / grossProduction) * 100 : 0;
@@ -66,20 +59,20 @@ export function ReportsPage({ payments, patients, appointments }: {
   const completedVisits = completedAppointments.length;
   const completionRate = appointments.length ? Math.round((completedVisits / appointments.length) * 100) : 0;
 
-  // Monthly collections, in calendar order.
-  const monthBuckets = new Map<string, { sortKey: number; year: number; month: number; revenue: number }>();
+  // Monthly collections, in calendar order. Each payment falls in the clinic-local month of its instant.
+  const monthRevenue = new Map<string, number>();
   for (const payment of payments) {
-    const parsed = monthOfPaymentLabel(payment.date);
-    if (!parsed) continue;
-    const bucket = monthBuckets.get(parsed.key) ?? { sortKey: parsed.sortKey, year: parsed.year, month: parsed.month, revenue: 0 };
-    bucket.revenue += payment.paid;
-    monthBuckets.set(parsed.key, bucket);
+    const dateKey = payment.paidAt ? clinicDateKey(payment.paidAt, timeZone) : "";
+    if (!dateKey) continue;
+    const monthKey = dateKey.slice(0, 7);
+    monthRevenue.set(monthKey, (monthRevenue.get(monthKey) ?? 0) + payment.paid);
   }
-  const monthlyData = [...monthBuckets.values()]
-    .sort((a, b) => a.sortKey - b.sortKey)
-    .map((bucket) => ({
-      label: formatDate(new Date(Date.UTC(bucket.year, bucket.month, 1)), { month: "short", year: "2-digit", timeZone: "UTC" }),
-      revenue: bucket.revenue,
+  // YYYY-MM keys sort chronologically as plain strings.
+  const monthlyData = [...monthRevenue.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([monthKey, revenue]) => ({
+      label: formatDate(`${monthKey}-01`, { timeZone, month: "short", year: "2-digit" }),
+      revenue,
     }));
   if (!monthlyData.length) monthlyData.push({ label: "—", revenue: 0 });
 
@@ -133,7 +126,7 @@ export function ReportsPage({ payments, patients, appointments }: {
     try {
       const rows: (string | number)[][] = [
         [t("Dental Clinic Executive Report")],
-        [t("Generated"), formatDate(new Date(), { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: DEFAULT_CLINIC_TIME_ZONE })],
+        [t("Generated"), formatDate(new Date(), { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone })],
         [],
         [t("Summary")],
         [t("Gross production"), formatMoney(grossProduction)],
@@ -160,7 +153,7 @@ export function ReportsPage({ payments, patients, appointments }: {
           payment.invoice,
           payment.patientName,
           payment.treatment,
-          payment.date,
+          paymentDate(payment),
           payment.total,
           payment.paid,
           payment.discount,
@@ -196,7 +189,7 @@ export function ReportsPage({ payments, patients, appointments }: {
       const url = URL.createObjectURL(new Blob(["﻿", csv], { type: "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `clinic-executive-report-${clinicTodayKey(DEFAULT_CLINIC_TIME_ZONE)}.csv`;
+      link.download = `clinic-executive-report-${clinicTodayKey(timeZone)}.csv`;
       document.body.append(link);
       link.click();
       link.remove();

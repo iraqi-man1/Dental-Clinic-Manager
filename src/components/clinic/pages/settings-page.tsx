@@ -236,7 +236,8 @@ export function SettingsPage({ clinic, onSaveClinic, role }: {
                       ))}
                     </Select>
                     <span className="mt-1.5 block text-[11px] font-normal text-muted-foreground">
-                      {t("Appointment times and today's date use this time zone. Default: {zone}", { zone: DEFAULT_CLINIC_TIME_ZONE })}
+                      {t("Appointment times and today's date use this time zone. Default:")}{" "}
+                      <span dir="ltr" data-no-translate>{DEFAULT_CLINIC_TIME_ZONE}</span>
                     </span>
                   </label>
                 </div>

@@ -94,6 +94,7 @@ const ar: Record<string, string> = {
   "Enter a valid date of birth.": "أدخل تاريخ ميلاد صالحًا.",
   "Date of birth cannot be in the future.": "لا يمكن أن يكون تاريخ الميلاد في المستقبل.",
   "Date of birth must be within the last {years} years.": "يجب أن يكون تاريخ الميلاد خلال آخر {years} سنة.",
+  "Enter the patient’s full name.": "أدخل الاسم الكامل للمريض.",
   "Gender": "الجنس",
   "Female": "أنثى",
   "Male": "ذكر",

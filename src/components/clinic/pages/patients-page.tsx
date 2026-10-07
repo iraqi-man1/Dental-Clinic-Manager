@@ -38,7 +38,7 @@ import type { Appointment, ClinicRole, Patient, Payment, ToothCondition, ToothSu
 import { cn, iraqiMobileValidationMessage, normalizeIraqiMobileNumber } from "@/lib/utils";
 import { toast } from "sonner";
 import { uploadPatientFile } from "@/lib/supabase/clinic-data";
-import { useClinicPreferences } from "@/lib/clinic-preferences";
+import { useClinicPreferences, type ClinicPreferences } from "@/lib/clinic-preferences";
 import { createId } from "@/lib/ids";
 import {
   DEFAULT_CLINIC_TIME_ZONE,
@@ -109,6 +109,22 @@ function dateOfBirthIssue(value: string, todayKey: string): DateOfBirthIssue | n
   if (value > todayKey) return "future";
   if (value < earliestDateOfBirthKey(todayKey)) return "tooOld";
   return null;
+}
+
+/**
+ * Last visit as a clinic-local date in the active locale. Patients without a visit show "New patient".
+ * The English `lastVisit` label is used only when a record has no instant (for example, legacy demo rows).
+ */
+function lastVisitText(
+  patient: Patient,
+  timeZone: string,
+  formatDate: ClinicPreferences["formatDate"],
+  t: ClinicPreferences["t"],
+) {
+  if (patient.lastVisitAt) {
+    return formatDate(patient.lastVisitAt, { timeZone, month: "short", day: "numeric", year: "numeric" });
+  }
+  return patient.lastVisit === "New patient" ? t("New patient") : patient.lastVisit;
 }
 
 /** Appointment labels come from the instant in the clinic zone. The stored display labels are a fallback only. */
@@ -214,32 +230,32 @@ function AddPatientDialog({ onAdd, timeZone }: { onAdd: (patient: Patient) => Pr
   const { t } = useClinicPreferences();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [dateOfBirthError, setDateOfBirthError] = useState("");
   const todayKey = clinicTodayKey(timeZone);
-  const earliestKey = earliestDateOfBirthKey(todayKey);
+  const dateOfBirthMessage = (issue: DateOfBirthIssue) =>
+    issue === "required" ? t("Enter the date of birth.")
+      : issue === "invalid" ? t("Enter a valid date of birth.")
+        : issue === "future" ? t("Date of birth cannot be in the future.")
+          : t("Date of birth must be within the last {years} years.", { years: MAX_PATIENT_AGE_YEARS });
+  const clearErrors = () => {
+    setNameError("");
+    setPhoneError("");
+    setDateOfBirthError("");
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const name = String(form.get("name")).trim();
-    const phone = normalizeIraqiMobileNumber(String(form.get("phone")));
-    if (!phone) {
-      setPhoneError(t(iraqiMobileValidationMessage));
-      return;
-    }
-    setPhoneError("");
+    const name = String(form.get("name") ?? "").trim();
+    const phone = normalizeIraqiMobileNumber(String(form.get("phone") ?? ""));
     const dateOfBirth = String(form.get("dateOfBirth") ?? "");
     const issue = dateOfBirthIssue(dateOfBirth, todayKey);
-    if (issue) {
-      setDateOfBirthError(
-        issue === "required" ? t("Enter the date of birth.")
-          : issue === "invalid" ? t("Enter a valid date of birth.")
-            : issue === "future" ? t("Date of birth cannot be in the future.")
-              : t("Date of birth must be within the last {years} years.", { years: MAX_PATIENT_AGE_YEARS }),
-      );
-      return;
-    }
-    setDateOfBirthError("");
+    // The form uses noValidate, so every check runs here and shows its translated message inline.
+    setNameError(name ? "" : t("Enter the patient’s full name."));
+    setPhoneError(phone ? "" : t(iraqiMobileValidationMessage));
+    setDateOfBirthError(issue ? dateOfBirthMessage(issue) : "");
+    if (!name || !phone || issue) return;
     setSaving(true);
     const id = createId();
     let saved: Patient | null = null;
@@ -279,7 +295,7 @@ function AddPatientDialog({ onAdd, timeZone }: { onAdd: (patient: Patient) => Pr
   };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button className={TOUCH_TARGET_CLASS} onClick={() => { setPhoneError(""); setDateOfBirthError(""); setOpen(true); }}>
+      <Button className={TOUCH_TARGET_CLASS} onClick={() => { clearErrors(); setOpen(true); }}>
         <Plus /> {t("Add patient")}
       </Button>
       <DialogContent>
@@ -289,10 +305,19 @@ function AddPatientDialog({ onAdd, timeZone }: { onAdd: (patient: Patient) => Pr
             {t("Create a complete patient profile. You can add clinical records and images afterward.")}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} noValidate className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t("Full name")}>
-              <Input name="name" required placeholder="Eleanor Anderson" className={TOUCH_TARGET_CLASS} />
+              <Input
+                name="name"
+                required
+                placeholder="Eleanor Anderson"
+                className={TOUCH_TARGET_CLASS}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={nameError ? "patient-name-error" : undefined}
+                onChange={() => nameError && setNameError("")}
+              />
+              {nameError && <span id="patient-name-error" className="mt-1 block text-[11px] font-medium text-rose-700">{nameError}</span>}
             </Field>
             <Field label={t("Date of birth")}>
               <Input
@@ -300,8 +325,6 @@ function AddPatientDialog({ onAdd, timeZone }: { onAdd: (patient: Patient) => Pr
                 type="date"
                 required
                 dir="ltr"
-                min={earliestKey}
-                max={todayKey}
                 className={TOUCH_TARGET_CLASS}
                 aria-invalid={Boolean(dateOfBirthError)}
                 aria-describedby={dateOfBirthError ? "patient-dob-error" : undefined}
@@ -390,13 +413,13 @@ function PatientDetails({
     surfaces: ToothSurfaceChart,
   ) => Promise<boolean>;
 }) {
-  const { formatMoney, locale, t } = useClinicPreferences();
+  const { formatDate, formatMoney, locale, t } = useClinicPreferences();
   const canEditClinical = ["owner", "admin", "dentist", "hygienist"].includes(role);
   const patientAppointments = appointments
     .filter((appointment) => appointment.patientId === patient.id)
     .sort((a, b) => (Date.parse(b.startsAt) || 0) - (Date.parse(a.startsAt) || 0));
   const relevantAppointment = patientAppointments.find((appointment) => appointment.status !== "Cancelled") ?? patientAppointments[0];
-  const lastVisit = patient.lastVisit === "New patient" ? t("New patient") : patient.lastVisit;
+  const lastVisit = lastVisitText(patient, timeZone, formatDate, t);
   const savedSurfaces = patient.toothSurfaces ?? {};
   // The chart shows draft edits. `savedChart` is the last chart the database confirmed, and a failed save reverts to it.
   const [chart, setChart] = useState(patient.toothChart);
@@ -420,13 +443,12 @@ function PatientDetails({
       saved = false;
     }
     setChartSaving(false);
+    // The shell reports the outcome with one toast. This page only keeps its state in step with the database.
     if (saved) {
       setSavedChart({ chart, surfaces: surfaceChart });
-      toast.success(t("Dental chart saved"));
     } else {
       setChart(savedChart.chart);
       setSurfaceChart(savedChart.surfaces);
-      toast.error(t("Dental chart could not be saved. The last saved chart is shown."));
     }
   };
 
@@ -821,7 +843,7 @@ export function PatientsPage({
   /** Clinic time zone used for "today" and age. Defaults to the clinic default zone. */
   timeZone?: string;
 }) {
-  const { formatMoney, t } = useClinicPreferences();
+  const { formatDate, formatMoney, t } = useClinicPreferences();
   const [search, setSearch] = useState(initialSearch ?? "");
   const [status, setStatus] = useState("All patients");
   const [selected, setSelected] = useState<Patient | null>(() =>
@@ -896,7 +918,7 @@ export function PatientsPage({
       label: t("Last visit"),
       render: (patient) => (
         <span className="whitespace-nowrap text-xs font-medium">
-          {patient.lastVisit === "New patient" ? t("New patient") : patient.lastVisit}
+          {lastVisitText(patient, timeZone, formatDate, t)}
         </span>
       ),
     },

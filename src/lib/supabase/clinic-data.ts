@@ -35,6 +35,7 @@ import { iraqiMobileValidationMessage, normalizeIraqiMobileNumber } from "@/lib/
 import { createClient, hasSupabaseConfig } from "./client";
 
 export const SESSION_UNAVAILABLE = "Your clinic session is unavailable. Please sign in again.";
+export const NO_ACTIVE_CLINIC = "This account is not linked to an active clinic.";
 export const SAVE_FAILED = "The change could not be saved. Please try again.";
 export const DEMO_SESSION_PAYMENT_UNAVAILABLE = "Session payments need a connected clinic workspace.";
 export const INVALID_APPOINTMENT_TIME = "Choose a valid appointment time.";
@@ -337,11 +338,18 @@ function mapClinic(row: ClinicRow): ClinicInfo {
   };
 }
 
-async function context(): Promise<ClinicContext | null> {
+type ContextResult = { ok: true; ctx: ClinicContext } | { ok: false; error: string };
+
+/**
+ * Resolves the signed-in user's active clinic. The error explains which check failed:
+ * SESSION_UNAVAILABLE when there is no auth session, NO_ACTIVE_CLINIC when the user has no
+ * active membership, and the server message when the membership query fails.
+ */
+async function resolveContext(): Promise<ContextResult> {
   const supabase = createClient();
-  if (!supabase) return null;
+  if (!supabase) return { ok: false, error: SESSION_UNAVAILABLE };
   const currentUser = (await supabase.auth.getUser()).data.user;
-  if (!currentUser) return null;
+  if (!currentUser) return { ok: false, error: SESSION_UNAVAILABLE };
   const { data, error } = await supabase
     .from("clinic_members")
     .select("clinic_id, role, clinics(name,phone,email,address,currency,timezone)")
@@ -349,21 +357,30 @@ async function context(): Promise<ClinicContext | null> {
     .eq("status", "active")
     .limit(1)
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: NO_ACTIVE_CLINIC };
   // The embedded clinic is a many-to-one relation, so PostgREST returns one object. The client
   // infers an array from the select string, which is why the cast goes through unknown.
   const membership = data as unknown as MembershipRow;
-  if (!membership.clinics) return null;
+  if (!membership.clinics) return { ok: false, error: NO_ACTIVE_CLINIC };
   const clinic = mapClinic(membership.clinics);
   return {
-    supabase,
-    userId: currentUser.id,
-    userEmail: currentUser.email,
-    clinicId: membership.clinic_id,
-    role: membership.role,
-    clinic,
-    timeZone: clinic.timezone ?? DEFAULT_CLINIC_TIME_ZONE,
+    ok: true,
+    ctx: {
+      supabase,
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      clinicId: membership.clinic_id,
+      role: membership.role,
+      clinic,
+      timeZone: clinic.timezone ?? DEFAULT_CLINIC_TIME_ZONE,
+    },
   };
+}
+
+async function context(): Promise<ClinicContext | null> {
+  const resolved = await resolveContext();
+  return resolved.ok ? resolved.ctx : null;
 }
 
 /* ----------------------------------------------------------------------------
@@ -383,6 +400,7 @@ function mapPatient(row: PatientRow, timeZone: string): Patient {
     phone: row.phone ?? "",
     email: row.email ?? "",
     lastVisit: row.last_visit_at ? clinicDateLabel(row.last_visit_at, timeZone, "en-US") : "New patient",
+    lastVisitAt: parseInstant(row.last_visit_at) ?? undefined,
     nextVisit: undefined,
     status: row.status === "inactive" ? "Inactive" : "Active",
     allergies: row.allergies ?? [],
@@ -458,6 +476,7 @@ function mapInvoice(row: InvoiceRow, timeZone: string, clinic: ClinicInfo): Paym
       receiptNumber: transaction.receipt_number ?? "",
       amount: num(transaction.amount),
       date: clinicDateLabel(transaction.paid_at, timeZone, "en-US"),
+      paidAt: parseInstant(transaction.paid_at) ?? undefined,
       method: transaction.method,
       treatment: transaction.treatment_name_snapshot ?? row.treatment_name ?? "Treatment",
       originalPrice: num(transaction.original_price_snapshot ?? row.original_price ?? row.total_amount),
@@ -476,6 +495,7 @@ function mapInvoice(row: InvoiceRow, timeZone: string, clinic: ClinicInfo): Paym
     treatment: row.treatment_name ?? "Treatment",
     originalPrice: num(row.original_price ?? row.total_amount),
     date: clinicDateLabel(latest?.paid_at ?? row.created_at, timeZone, "en-US"),
+    paidAt: parseInstant(latest?.paid_at ?? row.created_at) ?? undefined,
     total,
     paid,
     discount,
@@ -613,8 +633,9 @@ function mapPlanItem(row: PlanItemRow, sessions: PlanSessionRow[]): TreatmentPla
  */
 export async function loadClinicData(): Promise<LoadResult> {
   try {
-    const ctx = await context();
-    if (!ctx) return { ok: false, error: SESSION_UNAVAILABLE };
+    const resolved = await resolveContext();
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    const ctx = resolved.ctx;
     const { timeZone } = ctx;
     const now = Date.now();
     const windowStart = new Date(now - APPOINTMENT_WINDOW_DAYS_BACK * DAY_MS).toISOString();

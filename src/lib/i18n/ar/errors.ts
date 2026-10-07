@@ -11,6 +11,7 @@ const ar: Record<string, string> = {
   "Choose a valid time zone.": "اختر منطقة زمنية صالحة.",
   "Only the clinic owner or an admin can change clinic defaults.": "يمكن لمالك العيادة أو المسؤول فقط تغيير الإعدادات الافتراضية للعيادة.",
   "Enter a reason before reversing this payment.": "أدخل سبباً قبل عكس هذه الدفعة.",
+  "This account is not linked to an active clinic.": "هذا الحساب غير مرتبط بعيادة نشطة.",
 
   // Auth service messages (login, signup, and password flows).
   "Invalid login credentials": "بيانات تسجيل الدخول غير صحيحة",
