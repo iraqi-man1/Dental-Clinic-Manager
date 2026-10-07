@@ -1,0 +1,85 @@
+<Window x:Class="NargisClinic.Desktop.Views.ShellWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:NargisClinic.Desktop.Localization"
+        xmlns:vm="clr-namespace:NargisClinic.Desktop.ViewModels"
+        xmlns:views="clr-namespace:NargisClinic.Desktop.Views"
+        Title="{Binding ClinicName}"
+        Width="1200"
+        Height="780"
+        MinWidth="980"
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}"
+        FontFamily="Segoe UI, Tahoma, Arial"
+        FlowDirection="{Binding FlowDirection, Source={x:Static loc:Strings.Instance}}">
+  <Window.Resources>
+    <Style x:Key="NavItemStyle" TargetType="Button" BasedOn="{StaticResource NavButton}">
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+          <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+          <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+
+    <DataTemplate DataType="{x:Type vm:PatientsViewModel}">
+      <views:PatientsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:PlaceholderViewModel}">
+      <views:PlaceholderView />
+    </DataTemplate>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="260" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <!-- Sidebar: navigation comes from the signed-in role, never from hard-coded visibility. -->
+    <DockPanel Background="{StaticResource CardBrush}" Margin="0" LastChildFill="True">
+      <StackPanel DockPanel.Dock="Top" Margin="20,24,20,20">
+        <TextBlock Text="{Binding ClinicName}" Style="{StaticResource SectionTitle}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding RoleText}" Style="{StaticResource Muted}" Margin="0,6,0,0" />
+        <TextBlock Text="{Binding StaffLine}" Style="{StaticResource Muted}" Margin="0,2,0,0" />
+      </StackPanel>
+
+      <Button DockPanel.Dock="Bottom" Style="{StaticResource GhostButton}" Margin="20,12,20,20"
+              Content="{Binding [sign_out], Source={x:Static loc:Strings.Instance}}"
+              Command="{Binding SignOutCommand}" />
+
+      <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Muted}" Margin="20,0"
+                 Text="{Binding NoSectionsText}" />
+
+      <ItemsControl ItemsSource="{Binding Navigation}" Margin="12,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Style="{StaticResource NavItemStyle}" Margin="0,0,0,6"
+                    Content="{Binding Title}" Command="{Binding SelectCommand}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </DockPanel>
+
+    <Grid Grid.Column="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <Grid Margin="28,20,28,12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="{Binding ClinicLabel}" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Style="{StaticResource GhostButton}"
+                Content="{Binding [language_switch], Source={x:Static loc:Strings.Instance}}"
+                Command="{Binding ToggleLanguageCommand}" />
+      </Grid>
+
+      <ContentControl Grid.Row="1" Margin="28,0,28,28" Content="{Binding CurrentView}" />
+    </Grid>
+  </Grid>
+</Window>
