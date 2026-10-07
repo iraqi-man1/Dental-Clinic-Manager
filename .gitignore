@@ -11,3 +11,8 @@ coverage/
 # Local Netlify folder
 .netlify
 supabase/.temp/
+
+# Native Windows desktop (desktop/) build output
+desktop/**/bin/
+desktop/**/obj/
+desktop/publish/

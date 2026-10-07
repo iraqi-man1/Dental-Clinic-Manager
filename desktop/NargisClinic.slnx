@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NargisClinic.Core/NargisClinic.Core.csproj" />
+    <Project Path="src/NargisClinic.Desktop/NargisClinic.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NargisClinic.Core.Tests/NargisClinic.Core.Tests.csproj" />
+  </Folder>
+</Solution>

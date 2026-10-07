@@ -1,0 +1,65 @@
+name: Desktop (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", ".github/workflows/desktop-windows.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["desktop/**", ".github/workflows/desktop-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Test Core library
+        run: dotnet test desktop/tests/NargisClinic.Core.Tests/NargisClinic.Core.Tests.csproj -c Release
+
+  windows-app:
+    needs: core-tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: dotnet build desktop/NargisClinic.slnx -c Release
+
+      - name: Smoke test (creates every window in both languages)
+        shell: pwsh
+        env:
+          NARGIS_SMOKE_TEST: "1"
+        run: |
+          $exe = "desktop/src/NargisClinic.Desktop/bin/Release/net10.0-windows/NargisClinic.exe"
+          $process = Start-Process -FilePath $exe -PassThru -Wait -NoNewWindow
+          if ($process.ExitCode -ne 0) { Write-Error "Smoke test exited with $($process.ExitCode)"; exit 1 }
+
+      - name: Publish single-file Windows x64 build
+        run: >
+          dotnet publish desktop/src/NargisClinic.Desktop/NargisClinic.Desktop.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -o desktop/publish
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NargisClinic-win-x64
+          path: desktop/publish/
+          if-no-files-found: error
+          retention-days: 14
