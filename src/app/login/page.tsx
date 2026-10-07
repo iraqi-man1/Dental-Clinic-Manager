@@ -1,95 +1,166 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
   Eye,
   EyeOff,
+  Languages,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ensureClinicMembership } from "@/lib/clinic-bootstrap";
+import { useClinicPreferences } from "@/lib/clinic-preferences";
 import { createClient, hasSupabaseConfig } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
+
+type Mode = "login" | "signup" | "reset";
+// `text` is an English source string translated at render time, so a language switch updates it.
+// Server messages that cannot be translated are marked `server` and rendered untranslated.
+type Notice = { tone: "error" | "success"; text: string; server?: boolean };
+
+const CALLBACK_ERRORS: Partial<Record<string, string>> = {
+  auth_failed: "This sign-in link is invalid or has expired. Please try again.",
+  not_linked: "Your account is not linked to a clinic workspace.",
+  lookup_failed: "Could not open your clinic workspace. Please try again.",
+  setup_failed: "Could not open your clinic workspace. Please try again.",
+};
+
+function callbackNotice(code: string | null): Notice | null {
+  if (!code) return null;
+  return {
+    tone: "error",
+    text: CALLBACK_ERRORS[code] ?? "Something went wrong. Please sign in again.",
+  };
+}
+
+function authNotice(message: string): Notice {
+  if (message === "Invalid login credentials") {
+    return { tone: "error", text: "Invalid email or password." };
+  }
+  if (message === "Email not confirmed") {
+    return { tone: "error", text: "Confirm your email address before signing in." };
+  }
+  return { tone: "error", text: message, server: true };
+}
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function BrandMark({ variant }: { variant: "on-dark" | "on-light" }) {
+  const { t } = useClinicPreferences();
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className={cn(
+          "grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-white shadow-sm",
+          variant === "on-dark" && "ring-1 ring-white/30",
+        )}
+      >
+        <span className="app-brand text-2xl leading-none" aria-hidden="true" data-no-translate>
+          ن
+        </span>
+      </div>
+      <div className="min-w-0">
+        <p className={cn("app-brand text-3xl", variant === "on-light" && "text-primary")} data-no-translate>
+          نرجس
+        </p>
+        <p className={cn("text-xs", variant === "on-dark" ? "text-white/60" : "text-muted-foreground")}>
+          {t("Dental Studio")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { language, setLanguage, t } = useClinicPreferences();
+  const configured = hasSupabaseConfig();
+  const [mode, setMode] = useState<Mode>("login");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const router = useRouter();
-  const configured = hasSupabaseConfig();
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const [notice, setNotice] = useState<Notice | null>(() =>
+    callbackNotice(searchParams.get("error")),
+  );
+
+  const changeMode = (next: Mode) => {
+    setMode(next);
+    setNotice(null);
+    setShow(false);
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+    const confirmPassword = String(form.get("confirmPassword") ?? "");
+    setNotice(null);
+
+    const supabase = createClient();
+    if (!supabase) {
+      setNotice({
+        tone: "error",
+        text: "Supabase credentials are not configured. Use the demo workspace instead.",
+      });
+      return;
+    }
+    if (mode === "signup" && password !== confirmPassword) {
+      setNotice({ tone: "error", text: "Passwords do not match." });
+      return;
+    }
+
     setLoading(true);
-    setMessage("");
     try {
-      const f = new FormData(e.currentTarget),
-        email = String(f.get("email")),
-        password = String(f.get("password")),
-        supabase = createClient();
-      if (!supabase) {
-        setMessage(
-          "Supabase credentials are not configured. Use the demo workspace instead.",
-        );
-        return;
-      }
       if (mode === "reset") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${location.origin}/auth/callback?next=/update-password`,
         });
-        setMessage(error ? error.message : "Check your email for a secure password-reset link.");
-        return;
-      }
-      if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) {
-          setMessage(error.message);
-          return;
-        }
-        const { data: membership, error: membershipError } = await supabase
-          .from("clinic_members")
-          .select("clinic_id")
-          .limit(1)
-          .maybeSingle();
-        if (membershipError) {
-          setMessage("Could not open your clinic workspace. Please try again.");
-          return;
-        }
-        if (!membership) {
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          const clinicName = userData.user?.user_metadata?.clinic_name;
-          const fullName = userData.user?.user_metadata?.full_name ?? "Clinic owner";
-          if (userError || typeof clinicName !== "string" || !clinicName.trim()) {
-            setMessage("Your account is not linked to a clinic workspace.");
-            return;
-          }
-          const slug = `${clinicName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
-          const { error: clinicError } = await supabase.rpc("create_clinic", {
-            clinic_name: clinicName,
-            clinic_slug: slug,
-            member_name: fullName,
-          });
-          if (clinicError) {
-            setMessage("Could not open your clinic workspace. Please try again.");
-            return;
-          }
-        }
-        window.location.assign("/");
+        setNotice(
+          error
+            ? authNotice(error.message)
+            : {
+                tone: "success",
+                text: "Check your email for a secure password-reset link.",
+              },
+        );
         return;
       }
 
-      const fullName = String(f.get("name")),
-        clinic = String(f.get("clinic"));
+      if (mode === "login") {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          setNotice(authNotice(error.message));
+          return;
+        }
+        if (!data.user) {
+          setNotice({ tone: "error", text: "Could not connect to the authentication service. Please try again." });
+          return;
+        }
+        const membership = await ensureClinicMembership(supabase, data.user);
+        if (!membership.ok) {
+          setNotice(callbackNotice(membership.error));
+          return;
+        }
+        router.replace("/");
+        router.refresh();
+        return;
+      }
+
+      const fullName = String(form.get("name") ?? "").trim();
+      const clinic = String(form.get("clinic") ?? "").trim();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -99,60 +170,72 @@ export default function LoginPage() {
         },
       });
       if (error) {
-        setMessage(error.message);
+        setNotice(authNotice(error.message));
         return;
       }
-      if (!data.session) {
-        setMessage(
-          "Check your email to confirm your account, then sign in to create your clinic workspace.",
-        );
+      if (!data.session || !data.user) {
+        setNotice({
+          tone: "success",
+          text: "Check your email to confirm your account, then sign in to create your clinic workspace.",
+        });
         return;
       }
-      const slug = `${clinic
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
-      const { error: clinicError } = await supabase.rpc("create_clinic", {
-        clinic_name: clinic,
-        clinic_slug: slug,
-        member_name: fullName,
-      });
-      if (clinicError) {
-        setMessage("Could not open your clinic workspace. Please try again.");
+      const membership = await ensureClinicMembership(supabase, data.user);
+      if (!membership.ok) {
+        setNotice(callbackNotice(membership.error));
         return;
       }
-      window.location.assign("/");
+      router.replace("/");
+      router.refresh();
     } catch {
-      setMessage("Could not connect to the authentication service. Please try again.");
+      setNotice({
+        tone: "error",
+        text: "Could not connect to the authentication service. Please try again.",
+      });
     } finally {
       setLoading(false);
     }
   };
+
+  const title =
+    mode === "login"
+      ? "Welcome back"
+      : mode === "reset"
+        ? "Reset your password"
+        : "Start your clinic workspace";
+  const subtitle =
+    mode === "login"
+      ? "Sign in to manage today's care."
+      : mode === "reset"
+        ? "We'll email you a secure recovery link."
+        : "Create your account.";
+  const submitLabel =
+    loading
+      ? "Please wait…"
+      : mode === "login"
+        ? "Sign in"
+        : mode === "reset"
+          ? "Send reset link"
+          : "Create account";
+
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
       <section className="relative hidden overflow-hidden bg-[#0b6f68] p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute -right-40 -top-40 size-[500px] rounded-full bg-teal-300/15 blur-3xl" />
-        <div className="absolute -bottom-48 -left-32 size-[520px] rounded-full bg-sky-300/15 blur-3xl" />
-        <div className="relative flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-2xl bg-white text-xl font-black text-primary">
-            B
-          </div>
-          <div>
-            <p className="app-brand text-3xl" data-no-translate>نرجس</p>
-            <p className="text-xs text-white/60">Dental Studio</p>
-          </div>
+        <div className="absolute -bottom-48 -start-32 size-[520px] rounded-full bg-sky-300/15 blur-3xl" />
+        <div className="relative">
+          <BrandMark variant="on-dark" />
         </div>
         <div className="relative max-w-xl">
           <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold">
             <Sparkles className="size-3.5" />
-            Modern practice management
+            {t("Modern practice management")}
           </span>
           <h1 className="mt-6 text-5xl font-bold leading-[1.08] tracking-[-.04em]">
-            Clinical care and clinic operations, beautifully together.
+            {t("Clinical care and clinic operations, beautifully together.")}
           </h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-white/70">
-            A secure workspace for patient care, scheduling, treatments,
-            payments, and the people behind every healthy smile.
+            {t("A secure workspace for patient care, scheduling, treatments, payments, and the people behind every healthy smile.")}
           </p>
           <div className="mt-10 grid grid-cols-2 gap-4">
             {[
@@ -160,137 +243,180 @@ export default function LoginPage() {
               "Interactive dental chart",
               "Realtime team coordination",
               "Private X-ray storage",
-            ].map((x) => (
-              <div key={x} className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="size-4 text-teal-200" />
-                {x}
+            ].map((feature) => (
+              <div key={feature} className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="size-4 shrink-0 text-teal-200" />
+                {t(feature)}
               </div>
             ))}
           </div>
         </div>
         <p className="relative text-xs text-white/50">
-          Protected by role-based access and PostgreSQL row-level security.
+          {t("Protected by role-based access and PostgreSQL row-level security.")}
         </p>
       </section>
-      <section className="grid place-items-center bg-[#f7f9f9] p-5">
+
+      <section className="relative grid place-items-center bg-[#f7f9f9] p-5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setLanguage(language === "ar" ? "en" : "ar")}
+          aria-label={t("Switch language")}
+          className="absolute end-3 top-3 min-h-11 gap-2 px-3 text-xs font-semibold text-muted-foreground"
+        >
+          <Languages className="size-4" />
+          <span lang={language === "ar" ? "en" : "ar"} data-no-translate>
+            {language === "ar" ? "English" : "العربية"}
+          </span>
+        </Button>
+
         <Card className="w-full max-w-md shadow-xl shadow-slate-900/5">
           <CardContent className="p-7 sm:p-9">
             <div className="mb-8 lg:hidden">
-              <div className="grid size-11 place-items-center rounded-2xl bg-primary text-xl font-black text-white">
-                B
-              </div>
+              <BrandMark variant="on-light" />
             </div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              {mode === "login" ? "Welcome back" : mode === "reset" ? "Reset your password" : "Start your clinic workspace"}
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {mode === "login" ? "Sign in to manage today’s care." : mode === "reset" ? "We’ll email you a secure recovery link." : "Create your account."}
-            </p>
+            <h2 className="text-2xl font-bold tracking-tight">{t(title)}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{t(subtitle)}</p>
+
             <form className="mt-7 space-y-4" onSubmit={submit}>
               {mode === "signup" && (
                 <>
                   <label className="block text-xs font-semibold">
-                    Your full name
+                    {t("Your full name")}
                     <Input
                       name="name"
                       required
+                      autoComplete="name"
                       className="mt-1.5"
-                      placeholder="Dr. Maya Chen"
+                      placeholder={t("Dr. Maya Chen")}
                     />
                   </label>
                   <label className="block text-xs font-semibold">
-                    Clinic name
+                    {t("Clinic name")}
                     <Input
                       name="clinic"
                       required
+                      autoComplete="organization"
                       className="mt-1.5"
-                      placeholder="Clinic name"
+                      placeholder={t("Clinic name")}
                     />
                   </label>
                 </>
               )}
               <label className="block text-xs font-semibold">
-                Email address
+                {t("Email address")}
                 <Input
                   name="email"
                   type="email"
                   required
+                  autoComplete="email"
+                  inputMode="email"
+                  dir="ltr"
                   className="mt-1.5"
                   placeholder="maya@brightsmile.com"
                 />
               </label>
-              {mode !== "reset" && <label className="block text-xs font-semibold">
-                Password
-                <div className="relative mt-1.5">
+              {mode !== "reset" && (
+                <label className="block text-xs font-semibold">
+                  {t("Password")}
+                  <div className="relative mt-1.5">
+                    <Input
+                      name="password"
+                      type={show ? "text" : "password"}
+                      minLength={mode === "signup" ? 8 : undefined}
+                      required
+                      autoComplete={mode === "login" ? "current-password" : "new-password"}
+                      className="pe-12"
+                      placeholder={t("At least 8 characters")}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShow(!show)}
+                      className="absolute end-0 top-1/2 size-11 -translate-y-1/2 text-muted-foreground"
+                      aria-label={show ? t("Hide password") : t("Show password")}
+                    >
+                      {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </Button>
+                  </div>
+                </label>
+              )}
+              {mode === "signup" && (
+                <label className="block text-xs font-semibold">
+                  {t("Confirm password")}
                   <Input
-                    name="password"
+                    name="confirmPassword"
                     type={show ? "text" : "password"}
                     minLength={8}
                     required
-                    className="pe-10"
-                    placeholder="At least 8 characters"
+                    autoComplete="new-password"
+                    className="mt-1.5"
+                    placeholder={t("Re-enter your password")}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShow(!show)}
-                    className="absolute end-1 top-1/2 size-8 -translate-y-1/2 text-muted-foreground"
-                    aria-label={show ? "Hide password" : "Show password"}
-                  >
-                    {show ? (
-                      <EyeOff className="size-4" />
-                    ) : (
-                      <Eye className="size-4" />
-                    )}
-                  </Button>
-                </div>
-              </label>}
-              {message && (
-                <div className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
-                  {message}
+                </label>
+              )}
+              {notice && (
+                <div
+                  role={notice.tone === "error" ? "alert" : "status"}
+                  className={cn(
+                    "rounded-xl p-3 text-xs leading-relaxed ring-1",
+                    notice.tone === "error"
+                      ? "bg-rose-50 text-rose-700 ring-rose-200"
+                      : "bg-emerald-50 text-emerald-800 ring-emerald-200",
+                  )}
+                >
+                  {notice.server ? (
+                    <span data-no-translate>{notice.text}</span>
+                  ) : (
+                    t(notice.text)
+                  )}
                 </div>
               )}
               <Button className="w-full" size="lg" disabled={loading}>
-                {loading ? "Please wait…" : mode === "login" ? "Sign in" : mode === "reset" ? "Send reset link" : "Create account"}
-                <ArrowRight />
+                {t(submitLabel)}
+                <ArrowRight className="rtl:rotate-180" />
               </Button>
             </form>
-            {mode === "login" && <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => { setMode("reset"); setMessage(""); }}
-              className="mt-4 w-full text-center text-xs text-primary"
-            >Forgot password?</Button>}
-            <div className="my-6 h-px bg-border" />
-            <p className="text-center text-sm text-muted-foreground">
-              {mode === "login" ? "New here?" : "Already have an account?"}{" "}
+
+            {mode === "login" && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setMode(mode === "login" ? "signup" : "login");
-                  setMessage("");
-                }}
-                className="h-auto px-1 font-semibold text-primary"
+                onClick={() => changeMode("reset")}
+                className="mt-4 min-h-11 w-full text-center text-xs text-primary"
               >
-                {mode === "login" ? "Create an account" : "Sign in"}
+                {t("Forgot password?")}
+              </Button>
+            )}
+            <div className="my-6 h-px bg-border" />
+            <p className="text-center text-sm text-muted-foreground">
+              {t(mode === "login" ? "New here?" : "Already have an account?")}{" "}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => changeMode(mode === "login" ? "signup" : "login")}
+                className="min-h-11 px-2 font-semibold text-primary"
+              >
+                {t(mode === "login" ? "Create an account" : "Sign in")}
               </Button>
             </p>
             {!configured && (
               <Button
+                type="button"
                 variant="ghost"
-                className="mt-3 w-full"
+                className="mt-3 min-h-11 w-full"
                 onClick={() => router.push("/")}
               >
-                Open interactive demo
+                {t("Open interactive demo")}
               </Button>
             )}
             <div className="mt-6 flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
               <ShieldCheck className="size-3.5" />
-              Secure, encrypted clinic access
+              {t("Secure, encrypted clinic access")}
             </div>
           </CardContent>
         </Card>

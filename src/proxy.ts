@@ -1,10 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Netlify packages this convention as an Edge function. Keep the Supabase
-// cookie-refresh logic at the request boundary without relying on its Node
-// Proxy adapter.
-export async function middleware(request: NextRequest) {
+// Next.js 16 renamed the `middleware` file convention to `proxy`. This file runs on the
+// default Node.js runtime (the `runtime` option is not available for proxy files) and keeps
+// the Supabase session cookies fresh at the request boundary.
+export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) return NextResponse.next({ request });

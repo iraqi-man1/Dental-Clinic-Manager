@@ -46,6 +46,8 @@ export type Patient = {
   patientNo: string;
   name: string;
   initials: string;
+  /** Date of birth as a clinic-independent calendar date (YYYY-MM-DD). `age` is derived from it for display. */
+  dateOfBirth?: string;
   age: number;
   gender: "Female" | "Male" | "Other";
   phone: string;
@@ -57,6 +59,8 @@ export type Patient = {
   conditions: string[];
   notes: string;
   balance: number;
+  /** Last visit as an ISO instant. Undefined for a patient with no visit. `lastVisit` is an English label for export only. */
+  lastVisitAt?: string;
   avatarColor: string;
   toothChart: Record<number, ToothCondition>;
   toothSurfaces?: ToothSurfaceChart;
@@ -68,9 +72,16 @@ export type Appointment = {
   id: string;
   patientId: string;
   patientName: string;
-  time: string;
-  endTime: string;
+  /** Start instant as an ISO 8601 UTC string. This is the source of truth for scheduling. */
+  startsAt: string;
+  /** End instant as an ISO 8601 UTC string. */
+  endsAt: string;
+  /** Clinic-local calendar date key (YYYY-MM-DD) derived from `startsAt` in the clinic time zone. */
   date: string;
+  /** Display label only. Never parse this back into a date. */
+  time: string;
+  /** Display label only. Never parse this back into a date. */
+  endTime: string;
   treatment: string;
   procedureId?: string;
   treatmentPrice: number;
@@ -177,7 +188,10 @@ export type Payment = {
   patientName: string;
   treatment: string;
   originalPrice: number;
+  /** English display label for English-only export. Localized UI formats `paidAt` instead. */
   date: string;
+  /** ISO instant of the latest active transaction, or the invoice creation instant when none exists. */
+  paidAt?: string;
   total: number;
   paid: number;
   discount: number;
@@ -192,7 +206,10 @@ export type PaymentReceipt = {
   id: string;
   receiptNumber: string;
   amount: number;
+  /** English display label for English-only export. Localized UI formats `paidAt` instead. */
   date: string;
+  /** ISO instant of this transaction (paid_at). */
+  paidAt?: string;
   method: Payment["method"];
   treatment: string;
   originalPrice: number;
@@ -217,6 +234,8 @@ export type ClinicInfo = {
   email?: string;
   address?: Record<string, string>;
   currency?: string;
+  /** IANA time zone name, for example "Asia/Baghdad". Defaults to DEFAULT_CLINIC_TIME_ZONE. */
+  timezone?: string;
 };
 
 export type InventoryItem = {

@@ -6,11 +6,10 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
-  CalendarDays,
+  Banknote,
   ChevronRight,
   FileImage,
   Mail,
-  Banknote,
   Phone,
   Plus,
   Search,
@@ -39,7 +38,15 @@ import type { Appointment, ClinicRole, Patient, Payment, ToothCondition, ToothSu
 import { cn, iraqiMobileValidationMessage, normalizeIraqiMobileNumber } from "@/lib/utils";
 import { toast } from "sonner";
 import { uploadPatientFile } from "@/lib/supabase/clinic-data";
-import { useClinicPreferences } from "@/lib/clinic-preferences";
+import { useClinicPreferences, type ClinicPreferences } from "@/lib/clinic-preferences";
+import { createId } from "@/lib/ids";
+import {
+  DEFAULT_CLINIC_TIME_ZONE,
+  ageFromDateOfBirth,
+  clinicDateLabel,
+  clinicTimeLabel,
+  clinicTodayKey,
+} from "@/lib/clinic-time";
 import {
   DataTable,
   EmptyState,
@@ -47,51 +54,158 @@ import {
   type DataTableColumn,
 } from "@/components/clinic/app-ui";
 
+/** Session payments are collected by these roles. Mirrors the record_session_payment database check. */
+const SESSION_PAYMENT_ROLES: ClinicRole[] = ["owner", "admin", "billing", "front_desk", "assistant"];
+/** Phones need 44px touch targets. Larger screens keep the compact height. */
+const TOUCH_TARGET_CLASS = "h-11 sm:h-10";
+const TOUCH_TARGET_SMALL_CLASS = "h-11 sm:h-8";
+const MAX_PATIENT_AGE_YEARS = 120;
+const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+type PaymentMode = "full" | "partial" | "not_paid";
+type SessionPaymentInput = {
+  sessionId: string;
+  mode: PaymentMode;
+  amount?: number;
+  method: Payment["method"];
+  reference?: string;
+};
+type ClinicalNote = { id: string; text: string; isToday: boolean };
+type DateOfBirthIssue = "required" | "invalid" | "future" | "tooOld";
+
+function isLeapYear(year: number) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+/** True only for a real calendar date written as YYYY-MM-DD. */
+function isValidDateKey(value: string) {
+  const match = DATE_KEY_PATTERN.exec(value);
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  return (
+    probe.getUTCFullYear() === year &&
+    probe.getUTCMonth() === month - 1 &&
+    probe.getUTCDate() === day
+  );
+}
+
+/** The earliest accepted date of birth: the clinic's today minus MAX_PATIENT_AGE_YEARS. */
+function earliestDateOfBirthKey(todayKey: string) {
+  const [year, month, day] = todayKey.split("-").map(Number);
+  const targetYear = year - MAX_PATIENT_AGE_YEARS;
+  // 29 February falls back to 28 February when the target year is not a leap year.
+  const safeDay = month === 2 && day === 29 && !isLeapYear(targetYear) ? 28 : day;
+  return [
+    String(targetYear).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(safeDay).padStart(2, "0"),
+  ].join("-");
+}
+
+function dateOfBirthIssue(value: string, todayKey: string): DateOfBirthIssue | null {
+  if (!value) return "required";
+  if (!isValidDateKey(value)) return "invalid";
+  if (value > todayKey) return "future";
+  if (value < earliestDateOfBirthKey(todayKey)) return "tooOld";
+  return null;
+}
+
+/**
+ * Last visit as a clinic-local date in the active locale. Patients without a visit show "New patient".
+ * The English `lastVisit` label is used only when a record has no instant (for example, legacy demo rows).
+ */
+function lastVisitText(
+  patient: Patient,
+  timeZone: string,
+  formatDate: ClinicPreferences["formatDate"],
+  t: ClinicPreferences["t"],
+) {
+  if (patient.lastVisitAt) {
+    return formatDate(patient.lastVisitAt, { timeZone, month: "short", day: "numeric", year: "numeric" });
+  }
+  return patient.lastVisit === "New patient" ? t("New patient") : patient.lastVisit;
+}
+
+/** Appointment labels come from the instant in the clinic zone. The stored display labels are a fallback only. */
+function appointmentDateLabel(appointment: Appointment, timeZone: string, locale: string) {
+  return clinicDateLabel(appointment.startsAt, timeZone, locale) || appointment.date;
+}
+
+function appointmentTimeLabel(appointment: Appointment, timeZone: string, locale: string) {
+  return clinicTimeLabel(appointment.startsAt, timeZone, locale) || appointment.time;
+}
+
 function SessionPaymentDialog({ session, onPay, onClose }: {
   session: TreatmentSession | null;
   onClose: () => void;
-  onPay: (input: { sessionId: string; mode: "full" | "partial" | "not_paid"; amount?: number; method: Payment["method"]; reference?: string }) => Promise<{ ok: boolean; error?: string }>;
+  onPay: (input: SessionPaymentInput) => Promise<{ ok: boolean; error?: string }>;
 }) {
-  const { formatMoney } = useClinicPreferences();
-  const [mode, setMode] = useState<"full" | "partial" | "not_paid">("full");
+  const { formatMoney, t } = useClinicPreferences();
+  const [mode, setMode] = useState<PaymentMode>("full");
+  const [method, setMethod] = useState<Payment["method"]>("Cash");
   const [saving, setSaving] = useState(false);
   if (!session) return null;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setSaving(true);
+    event.preventDefault();
+    setSaving(true);
     const form = new FormData(event.currentTarget);
-    const result = await onPay({
-      sessionId: session.id, mode,
-      amount: mode === "partial" ? Number(form.get("amount")) : undefined,
-      method: String(form.get("method")) as Payment["method"],
-      reference: String(form.get("reference") ?? ""),
-    });
+    let result: { ok: boolean; error?: string };
+    try {
+      result = await onPay({
+        sessionId: session.id,
+        mode,
+        amount: mode === "partial" ? Number(form.get("amount")) : undefined,
+        method,
+        reference: String(form.get("reference") ?? ""),
+      });
+    } catch {
+      result = { ok: false };
+    }
     setSaving(false);
-    if (result.ok) { toast.success(mode === "not_paid" ? "Session left unpaid; no transaction was created" : "Session payment recorded"); onClose(); }
-    else toast.error(result.error ?? "Payment could not be recorded");
+    if (result.ok) {
+      toast.success(mode === "not_paid" ? t("Session left unpaid; no transaction was created") : t("Session payment recorded"));
+      onClose();
+    } else {
+      toast.error(result.error ?? t("Payment could not be recorded"));
+    }
   };
   return <Dialog open onOpenChange={(open) => !open && onClose()}>
     <DialogContent>
-      <DialogHeader><DialogTitle>Record session payment</DialogTitle><DialogDescription>
-        {session.procedureName} · Session {session.sessionNumber}. Payment does not complete the clinical session.
+      <DialogHeader><DialogTitle>{t("Record session payment")}</DialogTitle><DialogDescription>
+        <span data-no-translate>{session.procedureName}</span> · {t("Session {number}", { number: session.sessionNumber })}. {t("Payment does not complete the clinical session.")}
       </DialogDescription></DialogHeader>
       <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-center text-xs">
-        <div><p className="text-muted-foreground">Expected</p><p className="mt-1 font-bold">{formatMoney(session.expectedAmount)}</p></div>
-        <div><p className="text-muted-foreground">Paid</p><p className="mt-1 font-bold text-emerald-700">{formatMoney(session.amountPaid)}</p></div>
-        <div><p className="text-muted-foreground">Due</p><p className="mt-1 font-bold text-amber-700">{formatMoney(session.remaining)}</p></div>
+        <div><p className="text-muted-foreground">{t("Expected")}</p><p className="mt-1 font-bold">{formatMoney(session.expectedAmount)}</p></div>
+        <div><p className="text-muted-foreground">{t("Paid")}</p><p className="mt-1 font-bold text-emerald-700">{formatMoney(session.amountPaid)}</p></div>
+        <div><p className="text-muted-foreground">{t("Due")}</p><p className="mt-1 font-bold text-amber-700">{formatMoney(session.remaining)}</p></div>
       </div>
       <form onSubmit={submit} className="space-y-4">
-        <label className="block text-xs font-semibold">Payment status
-          <Select value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm">
-            <option value="full">Paid in Full</option><option value="partial">Partial Payment</option><option value="not_paid">Not Paid</option>
+        <label className="block text-xs font-semibold">{t("Payment status")}
+          <Select value={mode} onChange={(event) => setMode(event.target.value as PaymentMode)} className={cn("mt-1.5 w-full rounded-xl border bg-white px-3 text-sm", TOUCH_TARGET_CLASS)}>
+            <option value="full">{t("Paid in Full")}</option>
+            <option value="partial">{t("Partial Payment")}</option>
+            <option value="not_paid">{t("Not Paid")}</option>
           </Select>
         </label>
-        {mode === "full" && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">Amount to collect: <strong>{formatMoney(session.remaining)}</strong></div>}
-        {mode === "partial" && <label className="block text-xs font-semibold">Amount received<Input name="amount" type="number" min="0.01" max={session.remaining} step="0.01" required className="mt-1.5" /></label>}
+        {mode === "full" && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">{t("Amount to collect:")} <strong>{formatMoney(session.remaining)}</strong></div>}
+        {mode === "partial" && <label className="block text-xs font-semibold">{t("Amount received")}<Input name="amount" type="number" min="0.01" max={session.remaining} step="0.01" required className={cn("mt-1.5", TOUCH_TARGET_CLASS)} /></label>}
         {mode !== "not_paid" && <>
-          <label className="block text-xs font-semibold">Method<Select name="method" className="mt-1.5 h-10 w-full rounded-xl border bg-white px-3 text-sm"><option>Cash</option><option>Card</option><option>Insurance</option><option>Bank transfer</option></Select></label>
-          <label className="block text-xs font-semibold">Reference<Input name="reference" className="mt-1.5" placeholder="Optional" /></label>
+          <label className="block text-xs font-semibold">{t("Method")}
+            <Select value={method} onChange={(event) => setMethod(event.target.value as Payment["method"])} className={cn("mt-1.5 w-full rounded-xl border bg-white px-3 text-sm", TOUCH_TARGET_CLASS)}>
+              <option value="Cash">{t("Cash")}</option>
+              <option value="Card">{t("Card")}</option>
+              <option value="Insurance">{t("Insurance")}</option>
+              <option value="Bank transfer">{t("Bank transfer")}</option>
+            </Select>
+          </label>
+          <label className="block text-xs font-semibold">{t("Reference")}<Input name="reference" className={cn("mt-1.5", TOUCH_TARGET_CLASS)} placeholder={t("Optional")} /></label>
         </>}
-        <DialogFooter><Button type="submit" disabled={saving || session.remaining <= 0}>{saving ? "Saving…" : mode === "not_paid" ? "Confirm not paid" : "Confirm payment"}</Button></DialogFooter>
+        <DialogFooter>
+          <Button type="submit" className={TOUCH_TARGET_CLASS} disabled={saving || session.remaining <= 0}>
+            {saving ? t("Saving…") : mode === "not_paid" ? t("Confirm not paid") : t("Confirm payment")}
+          </Button>
+        </DialogFooter>
       </form>
     </DialogContent>
   </Dialog>;
@@ -112,95 +226,129 @@ function Field({
   );
 }
 
-function AddPatientDialog({ onAdd }: { onAdd: (patient: Patient) => Promise<Patient | null> }) {
+function AddPatientDialog({ onAdd, timeZone }: { onAdd: (patient: Patient) => Promise<Patient | null>; timeZone: string }) {
+  const { t } = useClinicPreferences();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [dateOfBirthError, setDateOfBirthError] = useState("");
+  const todayKey = clinicTodayKey(timeZone);
+  const dateOfBirthMessage = (issue: DateOfBirthIssue) =>
+    issue === "required" ? t("Enter the date of birth.")
+      : issue === "invalid" ? t("Enter a valid date of birth.")
+        : issue === "future" ? t("Date of birth cannot be in the future.")
+          : t("Date of birth must be within the last {years} years.", { years: MAX_PATIENT_AGE_YEARS });
+  const clearErrors = () => {
+    setNameError("");
+    setPhoneError("");
+    setDateOfBirthError("");
+  };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const name = String(form.get("name")).trim();
-    const phone = normalizeIraqiMobileNumber(String(form.get("phone")));
-    if (!phone) {
-      setPhoneError(iraqiMobileValidationMessage);
-      return;
-    }
-    setPhoneError("");
+    const name = String(form.get("name") ?? "").trim();
+    const phone = normalizeIraqiMobileNumber(String(form.get("phone") ?? ""));
+    const dateOfBirth = String(form.get("dateOfBirth") ?? "");
+    const issue = dateOfBirthIssue(dateOfBirth, todayKey);
+    // The form uses noValidate, so every check runs here and shows its translated message inline.
+    setNameError(name ? "" : t("Enter the patient’s full name."));
+    setPhoneError(phone ? "" : t(iraqiMobileValidationMessage));
+    setDateOfBirthError(issue ? dateOfBirthMessage(issue) : "");
+    if (!name || !phone || issue) return;
     setSaving(true);
-    const id = crypto.randomUUID();
-    const saved = await onAdd({
-      id,
-      patientNo: `PT-${id.replaceAll("-", "").slice(0, 10).toUpperCase()}`,
-      name,
-      initials: name
-        .split(" ")
-        .map((p) => p[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase(),
-      age: Number(form.get("age")),
-      gender: form.get("gender") as Patient["gender"],
-      phone,
-      email: String(form.get("email")).trim(),
-      lastVisit: "New patient",
-      status: "Active",
-      allergies: String(form.get("allergies") || "")
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
-      conditions: [],
-      notes: String(form.get("notes") || ""),
-      balance: 0,
-      avatarColor: "bg-teal-100 text-teal-700",
-      toothChart: {},
-    });
+    const id = createId();
+    let saved: Patient | null = null;
+    try {
+      saved = await onAdd({
+        id,
+        patientNo: `PT-${id.replaceAll("-", "").slice(0, 10).toUpperCase()}`,
+        name,
+        initials: name
+          .split(" ")
+          .map((p) => p[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase(),
+        dateOfBirth,
+        age: ageFromDateOfBirth(dateOfBirth, timeZone),
+        gender: form.get("gender") as Patient["gender"],
+        phone,
+        email: String(form.get("email")).trim(),
+        lastVisit: "New patient",
+        status: "Active",
+        allergies: String(form.get("allergies") || "")
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean),
+        conditions: [],
+        notes: String(form.get("notes") || ""),
+        balance: 0,
+        avatarColor: "bg-teal-100 text-teal-700",
+        toothChart: {},
+      });
+    } catch {
+      saved = null;
+    }
     setSaving(false);
     if (saved) setOpen(false);
   };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button onClick={() => { setPhoneError(""); setOpen(true); }}>
-        <Plus /> Add patient
+      <Button className={TOUCH_TARGET_CLASS} onClick={() => { clearErrors(); setOpen(true); }}>
+        <Plus /> {t("Add patient")}
       </Button>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a new patient</DialogTitle>
+          <DialogTitle>{t("Add a new patient")}</DialogTitle>
           <DialogDescription>
-            Create a complete patient profile. You can add clinical records and
-            images afterward.
+            {t("Create a complete patient profile. You can add clinical records and images afterward.")}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} noValidate className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full name">
-              <Input name="name" required placeholder="Eleanor Anderson" />
-            </Field>
-            <Field label="Age">
+            <Field label={t("Full name")}>
               <Input
-                name="age"
+                name="name"
                 required
-                min={0}
-                max={120}
-                type="number"
-                placeholder="36"
+                placeholder="Eleanor Anderson"
+                className={TOUCH_TARGET_CLASS}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={nameError ? "patient-name-error" : undefined}
+                onChange={() => nameError && setNameError("")}
               />
+              {nameError && <span id="patient-name-error" className="mt-1 block text-[11px] font-medium text-rose-700">{nameError}</span>}
             </Field>
-            <Field label="Gender">
+            <Field label={t("Date of birth")}>
+              <Input
+                name="dateOfBirth"
+                type="date"
+                required
+                dir="ltr"
+                className={TOUCH_TARGET_CLASS}
+                aria-invalid={Boolean(dateOfBirthError)}
+                aria-describedby={dateOfBirthError ? "patient-dob-error" : undefined}
+                onChange={() => dateOfBirthError && setDateOfBirthError("")}
+              />
+              {dateOfBirthError && <span id="patient-dob-error" className="mt-1 block text-[11px] font-medium text-rose-700">{dateOfBirthError}</span>}
+            </Field>
+            <Field label={t("Gender")}>
               <Select
                 name="gender"
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
+                className={cn("w-full rounded-xl border bg-white px-3 text-sm", TOUCH_TARGET_CLASS)}
               >
-                <option value="Female">Female</option>
-                <option value="Male">Male</option>
-                <option value="Other">Other</option>
+                <option value="Female">{t("Female")}</option>
+                <option value="Male">{t("Male")}</option>
+                <option value="Other">{t("Other")}</option>
               </Select>
             </Field>
-            <Field label="Phone">
+            <Field label={t("Phone")}>
               <Input
                 name="phone"
                 required
                 inputMode="tel"
                 dir="ltr"
+                className={TOUCH_TARGET_CLASS}
                 aria-invalid={Boolean(phoneError)}
                 aria-describedby={phoneError ? "patient-phone-error" : undefined}
                 placeholder="07XXXXXXXXX or +9647XXXXXXXXX"
@@ -208,34 +356,36 @@ function AddPatientDialog({ onAdd }: { onAdd: (patient: Patient) => Promise<Pati
               />
               {phoneError && <span id="patient-phone-error" className="mt-1 block text-[11px] font-medium text-rose-700">{phoneError}</span>}
             </Field>
-            <Field label="Email (optional)">
+            <Field label={t("Email (optional)")}>
               <Input
                 name="email"
                 type="email"
+                className={TOUCH_TARGET_CLASS}
                 placeholder="patient@example.com"
               />
             </Field>
-            <Field label="Allergies">
-              <Input name="allergies" placeholder="Penicillin, latex" />
+            <Field label={t("Allergies")}>
+              <Input name="allergies" className={TOUCH_TARGET_CLASS} placeholder={t("Penicillin, latex")} />
             </Field>
           </div>
-          <Field label="Clinical note">
+          <Field label={t("Clinical note")}>
             <Textarea
               name="notes"
               rows={3}
               className="w-full rounded-xl border p-3 text-sm outline-none focus:ring-4 focus:ring-primary/10"
-              placeholder="Important details for the care team…"
+              placeholder={t("Important details for the care team…")}
             />
           </Field>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
+              className={TOUCH_TARGET_CLASS}
               onClick={() => setOpen(false)}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creating…" : "Create patient"}</Button>
+            <Button type="submit" className={TOUCH_TARGET_CLASS} disabled={saving}>{saving ? t("Creating…") : t("Create patient")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -248,6 +398,7 @@ function PatientDetails({
   appointments,
   role,
   clinicianName,
+  timeZone,
   onBack,
   onChartChange,
 }: {
@@ -255,46 +406,98 @@ function PatientDetails({
   appointments: Appointment[];
   role: ClinicRole;
   clinicianName: string;
+  timeZone: string;
   onBack: () => void;
   onChartChange: (
     chart: Record<number, ToothCondition>,
     surfaces: ToothSurfaceChart,
-  ) => void;
+  ) => Promise<boolean>;
 }) {
-  const { formatMoney } = useClinicPreferences();
+  const { formatDate, formatMoney, locale, t } = useClinicPreferences();
   const canEditClinical = ["owner", "admin", "dentist", "hygienist"].includes(role);
-  const patientAppointments = appointments.filter((appointment) => appointment.patientId === patient.id)
-    .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+  const patientAppointments = appointments
+    .filter((appointment) => appointment.patientId === patient.id)
+    .sort((a, b) => (Date.parse(b.startsAt) || 0) - (Date.parse(a.startsAt) || 0));
   const relevantAppointment = patientAppointments.find((appointment) => appointment.status !== "Cancelled") ?? patientAppointments[0];
+  const lastVisit = lastVisitText(patient, timeZone, formatDate, t);
+  const savedSurfaces = patient.toothSurfaces ?? {};
+  // The chart shows draft edits. `savedChart` is the last chart the database confirmed, and a failed save reverts to it.
   const [chart, setChart] = useState(patient.toothChart);
-  const [surfaceChart, setSurfaceChart] = useState<ToothSurfaceChart>(
-    patient.toothSurfaces ?? {},
+  const [surfaceChart, setSurfaceChart] = useState<ToothSurfaceChart>(savedSurfaces);
+  const [savedChart, setSavedChart] = useState({ chart: patient.toothChart, surfaces: savedSurfaces });
+  const [chartSaving, setChartSaving] = useState(false);
+  const [notes, setNotes] = useState<ClinicalNote[]>(() =>
+    patient.notes ? [{ id: "stored-note", text: patient.notes, isToday: false }] : [],
   );
-  const [notes, setNotes] = useState([patient.notes].filter(Boolean));
   const [note, setNote] = useState("");
   const [images, setImages] = useState<{ name: string; url: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const upload = (files: FileList | null) => {
-    if (!files) return;
-    const selectedFiles = Array.from(files);
-    const next = selectedFiles.map((file) => ({
-      name: file.name,
-      url: URL.createObjectURL(file),
-    }));
-    setImages((old) => [...old, ...next]);
-    selectedFiles.forEach((file) => void uploadPatientFile(patient.id, file));
-    toast.success(
-      `${next.length} image${next.length === 1 ? "" : "s"} attached`,
-    );
+
+  const saveChart = async () => {
+    setChartSaving(true);
+    let saved = false;
+    try {
+      saved = await onChartChange(chart, surfaceChart);
+    } catch {
+      saved = false;
+    }
+    setChartSaving(false);
+    // The shell reports the outcome with one toast. This page only keeps its state in step with the database.
+    if (saved) {
+      setSavedChart({ chart, surfaces: surfaceChart });
+    } else {
+      setChart(savedChart.chart);
+      setSurfaceChart(savedChart.surfaces);
+    }
   };
+
+  const upload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const selectedFiles = Array.from(files);
+    setUploading(true);
+    const outcomes = await Promise.all(
+      selectedFiles.map(async (file) => {
+        try {
+          const result = await uploadPatientFile(patient.id, file);
+          return { file, ok: result.ok, error: result.error };
+        } catch {
+          return { file, ok: false, error: undefined };
+        }
+      }),
+    );
+    setUploading(false);
+    if (inputRef.current) inputRef.current.value = "";
+    // Previews appear only for files the server stored.
+    const stored = outcomes.filter((outcome) => outcome.ok);
+    const failed = outcomes.find((outcome) => !outcome.ok);
+    if (stored.length) {
+      setImages((old) => [
+        ...old,
+        ...stored.map((outcome) => ({ name: outcome.file.name, url: URL.createObjectURL(outcome.file) })),
+      ]);
+      toast.success(
+        stored.length === 1 ? t("1 image attached") : t("{count} images attached", { count: stored.length }),
+      );
+    }
+    if (failed) toast.error(failed.error ?? t("Image could not be uploaded"));
+  };
+
+  const addNote = () => {
+    if (!note.trim()) return;
+    setNotes((old) => [{ id: createId(), text: note, isToday: true }, ...old]);
+    setNote("");
+  };
+
   return (
     <div className="space-y-5">
       <Button
         onClick={onBack}
         variant="ghost"
         size="sm"
+        className={TOUCH_TARGET_SMALL_CLASS}
       >
-        <ArrowLeft className="size-4 rtl:rotate-180" /> Back to all patients
+        <ArrowLeft className="size-4 rtl:rotate-180" /> {t("Back to all patients")}
       </Button>
       <Card>
         <CardContent className="p-5 sm:p-6">
@@ -309,32 +512,23 @@ function PatientDetails({
                 <h2 className="text-2xl font-bold tracking-tight" data-no-translate>
                   {patient.name}
                 </h2>
-                <Badge variant="success">{patient.status}</Badge>
+                <Badge variant="success">{t(patient.status)}</Badge>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {patient.patientNo} · {patient.age} years · {patient.gender}
+                <span data-no-translate>{patient.patientNo}</span> · {t("{age} years", { age: patient.age })} · {t(patient.gender)}
               </p>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1.5" data-no-translate>
                   <Phone className="size-3.5" />
                   {patient.phone}
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Mail className="size-3.5" />
-                  {patient.email}
-                </span>
+                {patient.email ? (
+                  <span className="inline-flex items-center gap-1.5" data-no-translate>
+                    <Mail className="size-3.5" />
+                    {patient.email}
+                  </span>
+                ) : null}
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => toast.success("Patient check-in started")}
-              >
-                <CalendarDays /> Book visit
-              </Button>
-              {canEditClinical && <Button onClick={() => toast.success("Profile changes saved")}>
-                Save profile
-              </Button>}
             </div>
           </div>
         </CardContent>
@@ -342,24 +536,24 @@ function PatientDetails({
       <Tabs defaultValue="overview">
         <div className="overflow-x-auto">
           <TabsList className="min-w-max">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            {canEditClinical && <TabsTrigger value="chart">Dental chart</TabsTrigger>}
-            {canEditClinical && <TabsTrigger value="plans">Treatment plans</TabsTrigger>}
-            <TabsTrigger value="visits">Visit history</TabsTrigger>
-            {canEditClinical && <TabsTrigger value="images">X-rays & images</TabsTrigger>}
-            {canEditClinical && <TabsTrigger value="notes">Clinical notes</TabsTrigger>}
+            <TabsTrigger value="overview">{t("Overview")}</TabsTrigger>
+            {canEditClinical && <TabsTrigger value="chart">{t("Dental chart")}</TabsTrigger>}
+            {canEditClinical && <TabsTrigger value="plans">{t("Treatment plans")}</TabsTrigger>}
+            <TabsTrigger value="visits">{t("Visit history")}</TabsTrigger>
+            {canEditClinical && <TabsTrigger value="images">{t("X-rays & images")}</TabsTrigger>}
+            {canEditClinical && <TabsTrigger value="notes">{t("Clinical notes")}</TabsTrigger>}
           </TabsList>
         </div>
         <TabsContent value="overview">
           <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
             <Card>
               <CardHeader>
-                <CardTitle>Medical profile</CardTitle>
+                <CardTitle>{t("Medical profile")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Allergies
+                    {t("Allergies")}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {patient.allergies.length ? (
@@ -371,14 +565,14 @@ function PatientDetails({
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        No known allergies
+                        {t("No known allergies")}
                       </span>
                     )}
                   </div>
                 </div>
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Medical conditions
+                    {t("Medical conditions")}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {patient.conditions.length ? (
@@ -389,35 +583,35 @@ function PatientDetails({
                       ))
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        None reported
+                        {t("None reported")}
                       </span>
                     )}
                   </div>
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Last visit
+                    {t("Last visit")}
                   </p>
-                  <p className="text-sm font-semibold">{patient.lastVisit}</p>
+                  <p className="whitespace-nowrap text-sm font-semibold">{lastVisit}</p>
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Next appointment
+                    {t("Next appointment")}
                   </p>
                   <p className="text-sm font-semibold">
-                    {patient.nextVisit ?? "Not scheduled"}
+                    {patient.nextVisit ?? t("Not scheduled")}
                   </p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Financial summary</CardTitle>
+                <CardTitle>{t("Financial summary")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="rounded-2xl bg-slate-50 p-4">
                   <p className="text-xs text-muted-foreground">
-                    Outstanding balance
+                    {t("Outstanding balance")}
                   </p>
                   <p
                     className={cn(
@@ -432,12 +626,12 @@ function PatientDetails({
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-xl border p-3">
-                    <p className="text-xs text-muted-foreground">Appointments</p>
+                    <p className="text-xs text-muted-foreground">{t("Appointments")}</p>
                     <p className="mt-1 font-semibold">{patientAppointments.length}</p>
                   </div>
                   <div className="rounded-xl border p-3">
                     <p className="text-xs text-muted-foreground">
-                      Original price
+                      {t("Original price")}
                     </p>
                     <p className="mt-1 font-semibold">{relevantAppointment ? formatMoney(relevantAppointment.treatmentPrice) : "—"}</p>
                   </div>
@@ -445,24 +639,24 @@ function PatientDetails({
               </CardContent>
             </Card>
           </div>
-          <Card className="mt-5"><CardHeader><CardTitle>Requested treatment & appointment</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Treatment</p><p className="mt-1 font-semibold" data-no-translate>{relevantAppointment?.treatment ?? patient.requestedTreatment ?? "Not specified"}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Assigned doctor</p><p className="mt-1 font-semibold" data-no-translate>{relevantAppointment?.doctor ?? patient.assignedDoctor ?? "Not assigned"}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Appointment</p><p className="mt-1 font-semibold">{relevantAppointment ? `${relevantAppointment.date} · ${relevantAppointment.time}` : "Not scheduled"}</p></div>
-            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Original price</p><p className="mt-1 font-semibold">{relevantAppointment ? formatMoney(relevantAppointment.treatmentPrice) : "—"}</p></div>
+          <Card className="mt-5"><CardHeader><CardTitle>{t("Requested treatment & appointment")}</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Treatment")}</p><p className="mt-1 font-semibold" data-no-translate>{relevantAppointment?.treatment ?? patient.requestedTreatment ?? t("Not specified")}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Assigned doctor")}</p><p className="mt-1 font-semibold" data-no-translate>{relevantAppointment?.doctor ?? patient.assignedDoctor ?? t("Not assigned")}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Appointment")}</p><p className="mt-1 font-semibold whitespace-nowrap">{relevantAppointment ? `${appointmentDateLabel(relevantAppointment, timeZone, locale)} · ${appointmentTimeLabel(relevantAppointment, timeZone, locale)}` : t("Not scheduled")}</p></div>
+            <div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Original price")}</p><p className="mt-1 font-semibold">{relevantAppointment ? formatMoney(relevantAppointment.treatmentPrice) : "—"}</p></div>
           </CardContent></Card>
         </TabsContent>
-        <TabsContent value="chart">
+        {canEditClinical && <TabsContent value="chart">
           <Card>
-            <CardHeader className="flex-row items-start justify-between">
-              <div>
-                <CardTitle>Interactive odontogram</CardTitle>
+            <CardHeader className="flex-row items-start justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle>{t("Interactive odontogram")}</CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Universal numbering system · adult dentition
+                  {t("Universal numbering system · adult dentition")}
                 </p>
               </div>
-              <Button size="sm" onClick={() => onChartChange(chart, surfaceChart)}>
-                Save chart
+              <Button size="sm" className={TOUCH_TARGET_SMALL_CLASS} disabled={chartSaving} onClick={() => void saveChart()}>
+                {chartSaving ? t("Saving…") : t("Save chart")}
               </Button>
             </CardHeader>
             <CardContent>
@@ -474,14 +668,14 @@ function PatientDetails({
               />
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
         {canEditClinical && <TabsContent value="plans">
           <TreatmentsPage patients={[patient]} role={role} patientId={patient.id} embedded />
         </TabsContent>}
         <TabsContent value="visits">
           <Card>
             <CardHeader>
-              <CardTitle>Visit history</CardTitle>
+              <CardTitle>{t("Visit history")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-0">
               {patientAppointments.map((visit, i) => (
@@ -495,33 +689,37 @@ function PatientDetails({
                   {i < patientAppointments.length - 1 && (
                     <div className="absolute start-[17px] top-9 h-[calc(100%-20px)] w-px bg-border" />
                   )}
-                  <div className="flex-1 rounded-xl border p-4">
+                  <div className="min-w-0 flex-1 rounded-xl border p-4">
                     <div className="flex flex-wrap justify-between gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-semibold" data-no-translate>{visit.treatment}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {visit.date} · {visit.time} · {visit.doctor}
+                          <span className="whitespace-nowrap">{appointmentDateLabel(visit, timeZone, locale)}</span>
+                          {" · "}
+                          <span className="whitespace-nowrap">{appointmentTimeLabel(visit, timeZone, locale)}</span>
+                          {" · "}
+                          <span data-no-translate>{visit.doctor}</span>
                         </p>
                       </div>
                       <span className="text-sm font-bold">
                         {formatMoney(visit.treatmentPrice)}
                       </span>
                     </div>
-                    <p className="mt-3 text-xs leading-relaxed text-slate-600">{visit.status}</p>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-600">{t(visit.status)}</p>
                   </div>
                 </div>
               ))}
-              {!patientAppointments.length && <p className="py-8 text-center text-sm text-muted-foreground">No appointments recorded for this patient.</p>}
+              {!patientAppointments.length && <p className="py-8 text-center text-sm text-muted-foreground">{t("No appointments recorded for this patient.")}</p>}
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="images">
+        {canEditClinical && <TabsContent value="images">
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>X-rays & clinical images</CardTitle>
+            <CardHeader className="flex-row items-center justify-between gap-3">
+              <div className="min-w-0">
+                <CardTitle>{t("X-rays & clinical images")}</CardTitle>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Private files stored in this patient’s clinic folder
+                  {t("Private files stored in this patient’s clinic folder")}
                 </p>
               </div>
               <>
@@ -531,101 +729,87 @@ function PatientDetails({
                   multiple
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => upload(e.target.files)}
+                  onChange={(e) => void upload(e.target.files)}
                 />
-                <Button size="sm" onClick={() => inputRef.current?.click()}>
-                  <Upload /> Upload files
+                <Button size="sm" className={TOUCH_TARGET_SMALL_CLASS} disabled={uploading} onClick={() => inputRef.current?.click()}>
+                  <Upload /> {uploading ? t("Uploading…") : t("Upload files")}
                 </Button>
               </>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {images.map((img) => (
-                  <div
-                    key={img.url}
-                    className="overflow-hidden rounded-2xl border"
-                  >
-                    <img
-                      src={img.url}
-                      alt={img.name}
-                      className="h-40 w-full object-cover"
-                    />
-                    <p className="truncate p-3 text-xs font-semibold" data-no-translate>
-                      {img.name}
-                    </p>
-                  </div>
-                ))}
-                {[
-                  { name: "Bitewing · right", date: "Aug 24, 2026" },
-                  { name: "Panoramic X-ray", date: "Mar 04, 2026" },
-                ].map((image) => (
-                  <Button
-                    key={image.name}
-                    variant="outline"
-                    className="group grid h-48 place-items-center rounded-2xl border-dashed bg-surface-secondary text-center hover:border-primary hover:bg-primary/5"
-                  >
-                    <div>
-                      <FileImage className="mx-auto size-8 text-slate-300 group-hover:text-primary" />
-                      <p className="mt-3 text-sm font-semibold">{image.name}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {image.date}
+              {images.length ? (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {images.map((img) => (
+                    <div
+                      key={img.url}
+                      className="overflow-hidden rounded-2xl border"
+                    >
+                      <img
+                        src={img.url}
+                        alt={img.name}
+                        data-no-translate
+                        className="h-40 w-full object-cover"
+                      />
+                      <p className="truncate p-3 text-xs font-semibold" data-no-translate>
+                        {img.name}
                       </p>
                     </div>
-                  </Button>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={FileImage}
+                  title={t("No images attached yet")}
+                  description={t("Upload X-rays and clinical images for this patient.")}
+                />
+              )}
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="notes">
+        </TabsContent>}
+        {canEditClinical && <TabsContent value="notes">
           <Card>
             <CardHeader>
-              <CardTitle>Clinical notes</CardTitle>
+              <CardTitle>{t("Clinical notes")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="mb-5 flex gap-2">
+              <div className="mb-3 flex gap-2">
                 <Input
                   value={note}
+                  aria-label={t("Add a clinical note…")}
+                  className={TOUCH_TARGET_CLASS}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Add a clinical note…"
+                  placeholder={t("Add a clinical note…")}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && note.trim()) {
-                      setNotes((old) => [note, ...old]);
-                      setNote("");
-                      toast.success("Clinical note added");
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addNote();
                     }
                   }}
                 />
-                <Button
-                  onClick={() => {
-                    if (note.trim()) {
-                      setNotes((old) => [note, ...old]);
-                      setNote("");
-                      toast.success("Clinical note added");
-                    }
-                  }}
-                >
-                  Add note
+                <Button className={TOUCH_TARGET_CLASS} disabled={!note.trim()} onClick={addNote}>
+                  {t("Add note")}
                 </Button>
               </div>
+              <p className="mb-5 text-xs text-muted-foreground">{t("Clinical notes are not saved yet.")}</p>
               <div className="space-y-3">
-                {notes.map((n, i) => (
-                  <div key={`${n}-${i}`} className="rounded-xl border p-4" data-no-translate>
-                    <div className="mb-2 flex items-center justify-between">
+                {notes.map((entry) => (
+                  <div key={entry.id} className="rounded-xl border p-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold" data-no-translate>{clinicianName}</p>
-                      <span className="text-[10px] text-muted-foreground">
-                        {i === 0 ? "Today" : "Aug 24, 2026"}
-                      </span>
+                      {entry.isToday ? (
+                        <span className="text-[10px] text-muted-foreground">{t("Today")}</span>
+                      ) : null}
                     </div>
-                    <p className="text-sm leading-relaxed text-slate-600">
-                      {n}
+                    <p className="text-sm leading-relaxed text-slate-600" data-no-translate>
+                      {entry.text}
                     </p>
                   </div>
                 ))}
+                {!notes.length && <p className="py-8 text-center text-sm text-muted-foreground">{t("No clinical notes yet.")}</p>}
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
     </div>
   );
@@ -641,6 +825,7 @@ export function PatientsPage({
   sessions,
   role,
   onSessionPayment,
+  timeZone = DEFAULT_CLINIC_TIME_ZONE,
 }: {
   patients: Patient[];
   initialSearch?: string;
@@ -651,12 +836,14 @@ export function PatientsPage({
     id: string,
     chart: Record<number, ToothCondition>,
     surfaces: ToothSurfaceChart,
-  ) => void;
+  ) => Promise<boolean>;
   sessions: TreatmentSession[];
   role: ClinicRole;
-  onSessionPayment: (input: { sessionId: string; mode: "full" | "partial" | "not_paid"; amount?: number; method: Payment["method"]; reference?: string }) => Promise<{ ok: boolean; error?: string }>;
+  onSessionPayment: (input: SessionPaymentInput) => Promise<{ ok: boolean; error?: string }>;
+  /** Clinic time zone used for "today" and age. Defaults to the clinic default zone. */
+  timeZone?: string;
 }) {
-  const { formatMoney } = useClinicPreferences();
+  const { formatDate, formatMoney, t } = useClinicPreferences();
   const [search, setSearch] = useState(initialSearch ?? "");
   const [status, setStatus] = useState("All patients");
   const [selected, setSelected] = useState<Patient | null>(() =>
@@ -665,7 +852,7 @@ export function PatientsPage({
       : null,
   );
   const [paymentSession, setPaymentSession] = useState<TreatmentSession | null>(null);
-  const canCollect = ["owner", "admin", "billing", "front_desk", "dentist"].includes(role);
+  const canCollect = SESSION_PAYMENT_ROLES.includes(role);
   const patientSessions = (patientId: string) => sessions.filter((session) => session.patientId === patientId);
   const relevantSession = (patientId: string) => patientSessions(patientId)
     .filter((session) => session.status !== "completed" && session.status !== "cancelled")
@@ -689,6 +876,7 @@ export function PatientsPage({
         appointments={appointments}
         role={role}
         clinicianName={clinicianName}
+        timeZone={timeZone}
         onBack={() => setSelected(null)}
         onChartChange={(chart, surfaces) =>
           onChartChange(fresh.id, chart, surfaces)
@@ -699,7 +887,7 @@ export function PatientsPage({
   const columns: DataTableColumn<Patient>[] = [
     {
       key: "patient",
-      label: "Patient",
+      label: t("Patient"),
       isRowHeader: true,
       render: (patient) => (
         <div className="flex min-w-52 items-center gap-3">
@@ -708,62 +896,91 @@ export function PatientsPage({
           </Avatar>
           <div>
             <p className="text-sm font-semibold" data-no-translate>{patient.name}</p>
-            <p className="text-xs text-muted-foreground">{patient.patientNo} · {patient.age} yrs</p>
+            <p className="whitespace-nowrap text-xs text-muted-foreground">
+              <span data-no-translate>{patient.patientNo}</span> · {t("{age} yrs", { age: patient.age })}
+            </p>
           </div>
         </div>
       ),
     },
     {
       key: "contact",
-      label: "Contact",
+      label: t("Contact"),
       render: (patient) => (
         <div className="min-w-44">
-          <p className="text-xs font-medium" data-no-translate>{patient.phone}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground" data-no-translate>{patient.email}</p>
+          <p className="whitespace-nowrap text-xs font-medium" data-no-translate>{patient.phone}</p>
+          <p className="mt-0.5 whitespace-nowrap text-xs text-muted-foreground" data-no-translate>{patient.email}</p>
         </div>
       ),
     },
-    { key: "lastVisit", label: "Last visit", render: (patient) => <span className="text-xs font-medium">{patient.lastVisit}</span> },
+    {
+      key: "lastVisit",
+      label: t("Last visit"),
+      render: (patient) => (
+        <span className="whitespace-nowrap text-xs font-medium">
+          {lastVisitText(patient, timeZone, formatDate, t)}
+        </span>
+      ),
+    },
     {
       key: "alerts",
-      label: "Alerts",
+      label: t("Alerts"),
       render: (patient) => patient.allergies.length ? (
         <Badge variant="danger" data-no-translate><AlertTriangle className="me-1 size-3" />{patient.allergies[0]}</Badge>
-      ) : <span className="text-xs text-muted-foreground">None</span>,
+      ) : <span className="text-xs text-muted-foreground">{t("None")}</span>,
     },
     {
       key: "balance",
-      label: "Balance",
+      label: t("Balance"),
       render: (patient) => patient.balance ? (
-        <span className="text-sm font-semibold">{formatMoney(patient.balance)}</span>
-      ) : <span className="text-sm font-semibold text-success">Paid</span>,
+        <span className="whitespace-nowrap text-sm font-semibold">{formatMoney(patient.balance)}</span>
+      ) : <span className="text-sm font-semibold text-success">{t("Paid")}</span>,
     },
     {
       key: "sessions",
-      label: "Treatment sessions",
+      label: t("Treatment sessions"),
       render: (patient) => {
         const allSessions = patientSessions(patient.id);
         const completed = allSessions.filter((session) => session.status === "completed").length;
         const current = relevantSession(patient.id);
-        return <div className="min-w-40"><p className="text-xs font-semibold">{completed}/{allSessions.length} completed</p><p className="mt-1 text-[10px] text-muted-foreground">{Math.max(0, allSessions.length - completed)} remaining{current ? ` · Session ${current.sessionNumber}` : ""}</p></div>;
-      },
-    },
-    {
-      key: "payment",
-      label: "Session payment",
-      render: (patient) => {
-        const current = relevantSession(patient.id);
-        if (!current) return <span className="text-xs text-muted-foreground">No upcoming session</span>;
         return (
-          <div className="flex min-w-40 items-center gap-2">
-            <Badge variant={current.paymentStatus === "Paid" ? "success" : current.paymentStatus === "Partially Paid" ? "warning" : "danger"}>{current.paymentStatus}</Badge>
-            {canCollect && current.paymentStatus !== "Paid" ? <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); setPaymentSession(current); }}><Banknote /> Pay</Button> : null}
+          <div className="min-w-40">
+            <p className="whitespace-nowrap text-xs font-semibold">
+              {t("{done}/{total} completed", { done: completed, total: allSessions.length })}
+            </p>
+            <p className="mt-1 whitespace-nowrap text-[10px] text-muted-foreground">
+              {t("{count} remaining", { count: Math.max(0, allSessions.length - completed) })}
+              {current ? <> · {t("Session {number}", { number: current.sessionNumber })}</> : null}
+            </p>
           </div>
         );
       },
     },
-    { key: "status", label: "Status", render: (patient) => <Badge variant={patient.status === "Active" ? "success" : "secondary"}>{patient.status}</Badge> },
-    { key: "action", label: <span className="sr-only">Open patient</span>, render: () => <ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" /> },
+    {
+      key: "payment",
+      label: t("Session payment"),
+      render: (patient) => {
+        const current = relevantSession(patient.id);
+        if (!current) return <span className="text-xs text-muted-foreground">{t("No upcoming session")}</span>;
+        return (
+          <div className="flex min-w-40 items-center gap-2">
+            <Badge variant={current.paymentStatus === "Paid" ? "success" : current.paymentStatus === "Partially Paid" ? "warning" : "danger"}>{t(current.paymentStatus)}</Badge>
+            {canCollect && current.paymentStatus !== "Paid" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className={TOUCH_TARGET_SMALL_CLASS}
+                onClick={(event) => { event.stopPropagation(); setPaymentSession(current); }}
+              >
+                <Banknote /> {t("Pay")}
+              </Button>
+            ) : null}
+          </div>
+        );
+      },
+    },
+    { key: "status", label: t("Status"), render: (patient) => <Badge variant={patient.status === "Active" ? "success" : "secondary"}>{t(patient.status)}</Badge> },
+    { key: "action", label: <span className="sr-only">{t("Open patient")}</span>, render: () => <ChevronRight className="size-4 text-muted-foreground rtl:rotate-180" /> },
   ];
   return (
     <div className="space-y-5">
@@ -772,39 +989,44 @@ export function PatientsPage({
           <div className="relative max-w-md flex-1">
             <Search className="absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="bg-white ps-9"
+              className={cn("bg-white ps-9", TOUCH_TARGET_CLASS)}
               value={search}
+              aria-label={t("Search patients")}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search patients…"
+              placeholder={t("Search patients…")}
             />
           </div>
           <Select
             value={status}
+            aria-label={t("Filter by status")}
             onChange={(e) => setStatus(e.target.value)}
-            className="h-10 rounded-xl border bg-white px-3 text-sm"
+            className={cn("rounded-xl border bg-white px-3 text-sm", TOUCH_TARGET_CLASS)}
           >
-            <option>All patients</option>
-            <option>Active</option>
-            <option>Inactive</option>
+            <option value="All patients">{t("All patients")}</option>
+            <option value="Active">{t("Active")}</option>
+            <option value="Inactive">{t("Inactive")}</option>
           </Select>
         </div>
-        <AddPatientDialog onAdd={onAdd} />
+        <AddPatientDialog onAdd={onAdd} timeZone={timeZone} />
       </FilterBar>
       <Card className="overflow-hidden">
         {filtered.length ? (
-          <DataTable
-            ariaLabel="Patients"
-            columns={columns}
-            rows={filtered}
-            getRowKey={(patient) => patient.id}
-            contentClassName="min-w-[1120px]"
-            onRowAction={setSelected}
-          />
+          // The shared Table primitive scrolls sideways inside its own container. This region gives that scroll area a label.
+          <div role="region" aria-label={t("Patients")}>
+            <DataTable
+              ariaLabel={t("Patients")}
+              columns={columns}
+              rows={filtered}
+              getRowKey={(patient) => patient.id}
+              contentClassName="min-w-[1120px]"
+              onRowAction={setSelected}
+            />
+          </div>
         ) : (
           <EmptyState
             icon={UserRound}
-            title="No patients found"
-            description="Try a different name or status filter."
+            title={t("No patients found")}
+            description={t("Try a different name or status filter.")}
             className="m-5"
           />
         )}
