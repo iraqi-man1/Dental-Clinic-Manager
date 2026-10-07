@@ -23,7 +23,7 @@ export function Switch({ checked, defaultChecked = false, onCheckedChange, onCli
       data-state={isChecked ? "checked" : "unchecked"}
       disabled={disabled}
       className={cn(
-        "inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent bg-input p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary",
+        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent bg-input p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary max-sm:before:absolute max-sm:before:-inset-2.5 max-sm:before:content-['']",
         className,
       )}
       onClick={(event) => {

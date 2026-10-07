@@ -18,9 +18,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = (await request.json()) as InviteBody;
-  const fullName = body.fullName?.trim();
-  const email = body.email?.trim().toLowerCase();
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
+  }
+  const body = parsed as InviteBody;
+  const fullName = typeof body.fullName === "string" ? body.fullName.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const specialty = typeof body.specialty === "string" ? body.specialty.trim() : "";
   if (!fullName || !email || !/^\S+@\S+\.\S+$/.test(email) || !["dentist", "front_desk"].includes(body.role ?? "")) {
     return Response.json({ error: "A valid name, email, and account type are required." }, { status: 400 });
   }
@@ -58,7 +68,7 @@ export async function POST(request: Request) {
     email,
     role: body.role,
     status: "active",
-    specialty: body.specialty?.trim() || null,
+    specialty: specialty || null,
   });
   if (memberError) {
     await admin.auth.admin.deleteUser(invited.user.id);
@@ -73,7 +83,7 @@ export async function POST(request: Request) {
       email,
       role: body.role,
       status: "active",
-      specialty: body.specialty?.trim() || undefined,
+      specialty: specialty || undefined,
     },
   });
 }

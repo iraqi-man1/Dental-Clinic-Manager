@@ -1,38 +1,29 @@
 import { NextResponse } from "next/server";
+import { ensureClinicMembership } from "@/lib/clinic-bootstrap";
+import { safeInternalPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
+
+function loginRedirect(origin: string, error: string) {
+  const target = new URL("/login", origin);
+  target.searchParams.set("error", error);
+  return NextResponse.redirect(target);
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const requestedNext = url.searchParams.get("next");
-  const next = requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
-    ? requestedNext
-    : "/";
-  if (code) {
-    const supabase = await createClient();
-    const { data } = (await supabase?.auth.exchangeCodeForSession(code)) ?? {
-      data: null,
-    };
-    if (supabase && data?.user) {
-      const { data: membership } = await supabase
-        .from("clinic_members")
-        .select("clinic_id")
-        .limit(1)
-        .maybeSingle();
-      const clinicName = data.user.user_metadata?.clinic_name;
-      const fullName = data.user.user_metadata?.full_name ?? "Clinic owner";
-      if (!membership && typeof clinicName === "string" && clinicName.trim()) {
-        const slug = `${clinicName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")}-${Date.now().toString().slice(-5)}`;
-        await supabase.rpc("create_clinic", {
-          clinic_name: clinicName,
-          clinic_slug: slug,
-          member_name: fullName,
-        });
-      }
-    }
-  }
+  const next = safeInternalPath(url.searchParams.get("next"), "/");
+
+  if (!code) return loginRedirect(url.origin, "auth_failed");
+
+  const supabase = await createClient();
+  if (!supabase) return loginRedirect(url.origin, "auth_failed");
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error || !data.user) return loginRedirect(url.origin, "auth_failed");
+
+  const membership = await ensureClinicMembership(supabase, data.user);
+  if (!membership.ok) return loginRedirect(url.origin, membership.error);
+
   return NextResponse.redirect(new URL(next, url.origin));
 }

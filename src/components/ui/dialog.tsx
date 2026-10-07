@@ -51,7 +51,7 @@ export function DialogContent({
         <DialogPrimitive.Close
           type="button"
           aria-label={t("Close")}
-          className="absolute end-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:pointer-events-none print:hidden"
+          className="absolute end-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:pointer-events-none max-sm:min-h-11 max-sm:min-w-11 print:hidden"
         >
           <X className="size-4" />
         </DialogPrimitive.Close>
@@ -61,7 +61,7 @@ export function DialogContent({
 }
 
 export function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="dialog-header" className={cn("flex flex-col gap-1.5 pe-8 text-start", className)} {...props} />;
+  return <div data-slot="dialog-header" className={cn("flex flex-col gap-1.5 pe-14 text-start sm:pe-8", className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {

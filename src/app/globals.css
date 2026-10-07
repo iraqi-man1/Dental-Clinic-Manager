@@ -332,6 +332,8 @@ select {
   .dashboard-stats .stat-card:last-child { grid-column: 1 / -1; }
   .dashboard-stats .stat-value { font-size: 1.75rem; }
   .daily-brief h2 { line-height: 1.4; }
+  /* Touch-size rule: native selects stay at least 44px tall on phones (matches the Button and Input primitives). */
+  .clinic-shell select { min-height: 2.75rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

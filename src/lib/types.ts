@@ -46,6 +46,8 @@ export type Patient = {
   patientNo: string;
   name: string;
   initials: string;
+  /** Date of birth as a clinic-independent calendar date (YYYY-MM-DD). `age` is derived from it for display. */
+  dateOfBirth?: string;
   age: number;
   gender: "Female" | "Male" | "Other";
   phone: string;
@@ -68,9 +70,16 @@ export type Appointment = {
   id: string;
   patientId: string;
   patientName: string;
-  time: string;
-  endTime: string;
+  /** Start instant as an ISO 8601 UTC string. This is the source of truth for scheduling. */
+  startsAt: string;
+  /** End instant as an ISO 8601 UTC string. */
+  endsAt: string;
+  /** Clinic-local calendar date key (YYYY-MM-DD) derived from `startsAt` in the clinic time zone. */
   date: string;
+  /** Display label only. Never parse this back into a date. */
+  time: string;
+  /** Display label only. Never parse this back into a date. */
+  endTime: string;
   treatment: string;
   procedureId?: string;
   treatmentPrice: number;
@@ -217,6 +226,8 @@ export type ClinicInfo = {
   email?: string;
   address?: Record<string, string>;
   currency?: string;
+  /** IANA time zone name, for example "Asia/Baghdad". Defaults to DEFAULT_CLINIC_TIME_ZONE. */
+  timezone?: string;
 };
 
 export type InventoryItem = {

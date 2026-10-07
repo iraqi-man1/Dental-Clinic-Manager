@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useClinicPreferences } from "@/lib/clinic-preferences";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({
@@ -37,7 +38,7 @@ export function PageHeader({
   return (
     <header className="page-heading mb-6 flex flex-col justify-between gap-4 lg:mb-7 lg:flex-row lg:items-end">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold leading-9 tracking-[-0.035em] text-foreground sm:text-3xl">
+        <h1 className="break-words text-2xl font-semibold leading-9 tracking-[-0.035em] text-foreground sm:text-3xl">
           {title}
         </h1>
         {description ? (
@@ -47,7 +48,7 @@ export function PageHeader({
         ) : null}
       </div>
       {actions || status ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
           {status}
           {actions}
         </div>
@@ -131,7 +132,7 @@ export function StatCard({
             <Icon className="size-[18px]" />
           </div>
         </div>
-        <p className="stat-value mt-3 break-words text-[1.875rem] font-semibold leading-9 tracking-[-0.04em] text-foreground tabular-nums">
+        <p className="stat-value mt-3 break-words text-2xl font-semibold leading-8 tracking-[-0.04em] text-foreground tabular-nums sm:text-[1.875rem] sm:leading-9">
           {value}
         </p>
         {note || accessory ? (
@@ -155,7 +156,7 @@ export function FilterBar({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-xs sm:flex-row sm:items-center sm:p-4",
+        "flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-xs sm:flex-row sm:items-center sm:p-4 [&>*]:min-w-0",
         className,
       )}
     >
@@ -254,58 +255,66 @@ export function DataTable<T>({
 }) {
   return (
     <div className={cn("overflow-hidden rounded-xl bg-card", className)}>
-      <Table
+      <div
+        role="region"
         aria-label={ariaLabel}
-        className={cn("min-w-full text-sm", contentClassName)}
+        tabIndex={0}
+        className="overflow-x-auto overscroll-x-contain rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
       >
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {columns.map((column) => (
-              <TableHead
-                key={column.key}
-                scope="col"
-                className={column.className}
-              >
-                {column.label}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow
-              key={getRowKey(row)}
-              tabIndex={onRowAction ? 0 : undefined}
-              onClick={onRowAction ? (event) => {
-                if (event.defaultPrevented) return;
-                const target = event.target;
-                if (target instanceof Element && target.closest(rowControlSelector)) return;
-                onRowAction(row);
-              } : undefined}
-              onKeyDown={onRowAction ? (event) => {
-                if (event.target !== event.currentTarget || event.defaultPrevented) return;
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onRowAction(row);
-                }
-              } : undefined}
-              className={onRowAction ? "cursor-pointer focus-visible:bg-primary/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" : undefined}
-            >
+        <Table
+          aria-label={ariaLabel}
+          containerClassName="overflow-visible"
+          className={cn("min-w-full text-sm", contentClassName)}
+        >
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
               {columns.map((column) => (
-                column.isRowHeader ? (
-                  <th key={column.key} scope="row" className={cn("px-5 py-4 text-start align-middle font-normal", column.className)}>
-                    {column.render(row)}
-                  </th>
-                ) : (
-                  <TableCell key={column.key} className={column.className}>
-                    {column.render(row)}
-                  </TableCell>
-                )
+                <TableHead
+                  key={column.key}
+                  scope="col"
+                  className={column.className}
+                >
+                  {column.label}
+                </TableHead>
               ))}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow
+                key={getRowKey(row)}
+                tabIndex={onRowAction ? 0 : undefined}
+                onClick={onRowAction ? (event) => {
+                  if (event.defaultPrevented) return;
+                  const target = event.target;
+                  if (target instanceof Element && target.closest(rowControlSelector)) return;
+                  onRowAction(row);
+                } : undefined}
+                onKeyDown={onRowAction ? (event) => {
+                  if (event.target !== event.currentTarget || event.defaultPrevented) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onRowAction(row);
+                  }
+                } : undefined}
+                className={onRowAction ? "cursor-pointer focus-visible:bg-primary/5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" : undefined}
+              >
+                {columns.map((column) => (
+                  column.isRowHeader ? (
+                    <th key={column.key} scope="row" className={cn("px-5 py-4 text-start align-middle font-normal", column.className)}>
+                      {column.render(row)}
+                    </th>
+                  ) : (
+                    <TableCell key={column.key} className={column.className}>
+                      {column.render(row)}
+                    </TableCell>
+                  )
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -321,6 +330,8 @@ export function TablePagination({
   onChange: (page: number) => void;
   summary?: ReactNode;
 }) {
+  const { t } = useClinicPreferences();
+  const totalPages = Math.max(1, pages);
   const shown = Array.from({ length: Math.min(pages, 5) }, (_, index) => {
     if (pages <= 5) return index + 1;
     const start = Math.min(Math.max(1, page - 2), pages - 4);
@@ -328,9 +339,9 @@ export function TablePagination({
   });
 
   return (
-    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
+    <nav aria-label={t("Pagination")} className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
       <p className="text-sm text-muted-foreground">
-        {summary ?? <><span>Page</span> {page} <span>of</span> {pages}</>}
+        {summary ?? t("Page {page} of {total}", { page, total: totalPages })}
       </p>
       <ul className="flex items-center gap-1">
         <li>
@@ -339,7 +350,7 @@ export function TablePagination({
             variant="outline"
             size="icon"
             className="size-8"
-            aria-label="Previous page"
+            aria-label={t("Previous page")}
             disabled={page <= 1}
             onClick={() => onChange(page - 1)}
           >
@@ -347,12 +358,14 @@ export function TablePagination({
           </Button>
         </li>
         {shown.map((number) => (
-          <li key={number}>
+          // On phones only the current page number is shown; the summary and arrows cover the rest.
+          <li key={number} className={number === page ? undefined : "max-sm:hidden"}>
             <Button
               type="button"
               variant={number === page ? "secondary" : "ghost"}
               size="icon"
               className={cn("size-8 text-xs", number === page && "bg-primary/8 text-primary")}
+              aria-label={t("Go to page {page}", { page: number })}
               aria-current={number === page ? "page" : undefined}
               onClick={() => onChange(number)}
             >
@@ -366,7 +379,7 @@ export function TablePagination({
             variant="outline"
             size="icon"
             className="size-8"
-            aria-label="Next page"
+            aria-label={t("Next page")}
             disabled={page >= pages}
             onClick={() => onChange(page + 1)}
           >
@@ -383,8 +396,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   destructive = false,
   onConfirm,
 }: {
@@ -397,6 +410,7 @@ export function ConfirmDialog({
   destructive?: boolean;
   onConfirm: () => void;
 }) {
+  const { t } = useClinicPreferences();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -409,13 +423,13 @@ export function ConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {cancelLabel}
+            {cancelLabel ?? t("Cancel")}
           </Button>
           <Button
             variant={destructive ? "destructive" : "default"}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("Confirm")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -424,8 +438,9 @@ export function ConfirmDialog({
 }
 
 export function PageSkeleton() {
+  const { t } = useClinicPreferences();
   return (
-    <div className="space-y-5" aria-label="Loading page">
+    <div className="space-y-5" role="status" aria-label={t("Loading page")}>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <Card key={index}>

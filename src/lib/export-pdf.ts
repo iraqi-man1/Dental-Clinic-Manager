@@ -27,6 +27,8 @@ export async function exportPdf(source: HTMLElement, filename: string) {
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
     const width = 182;
     const maxHeight = Math.floor(canvas.width * 269 / width);
+    // A page must have room beyond the repeated table header, or the paging loop could never advance.
+    if (maxHeight <= headerHeight * 2) throw new Error("PDF could not be created");
     let offset = 0;
     let page = 0;
     while (offset < canvas.height) {

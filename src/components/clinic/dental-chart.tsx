@@ -61,6 +61,13 @@ function toothKind(number: number): ToothKind {
   return fromMidline >= 6 ? "molar" : fromMidline >= 4 ? "premolar" : fromMidline === 3 ? "canine" : "incisor";
 }
 
+const toothKindLabels: Record<ToothKind, string> = {
+  molar: "Molar",
+  premolar: "Premolar",
+  canine: "Canine",
+  incisor: "Incisor",
+};
+
 const toothAnatomy: Record<ToothKind, { root: string; crown: string; detail: string; pulp: string }> = {
   molar: {
     root: "M10 60 C9 45 5 18 11 9 C14 4 18 36 23 46 C25 49 28 44 30 33 C33 18 36 4 40 9 C45 17 43 45 44 60 Z",
@@ -172,10 +179,13 @@ function Tooth({ number, condition, states, selected, onClick }: {
   const { t } = useClinicPreferences();
   const kind = toothKind(number);
   const lower = number > 16;
-  const findings = toothSurfaces.flatMap((surface) => states[surface.value] && states[surface.value] !== "healthy"
-    ? [`${t(surface.label)}: ${t(chartStates.find((state) => state.value === states[surface.value])!.label)}`]
-    : []);
-  const label = `${t("Tooth")} ${number}, ${t(kind === "molar" ? "Molar" : kind === "premolar" ? "Premolar" : kind === "canine" ? "Canine" : "Incisor")}, ${t(condition)}${findings.length ? `, ${findings.join(", ")}` : ""}`;
+  const findings = toothSurfaces.flatMap((surface) => {
+    const state = states[surface.value];
+    if (!state || state === "healthy") return [];
+    const stateLabel = chartStates.find((item) => item.value === state)?.label;
+    return stateLabel ? [`${t(surface.label)}: ${t(stateLabel)}`] : [];
+  });
+  const label = `${t("Tooth")} ${number}, ${t(toothKindLabels[kind])}, ${t(condition)}${findings.length ? `, ${findings.join(", ")}` : ""}`;
   const numberLabel = (
     <span className={cn("flex h-6 min-w-6 items-center justify-center rounded-md px-1 text-[11px] font-semibold tabular-nums", selected ? "bg-primary text-primary-foreground" : "text-muted-foreground")} data-no-translate>
       {number}
@@ -259,8 +269,8 @@ export function DentalChart({
     onSurfaceChange(next);
   };
 
-  const renderRow = (numbers: number[]) => (
-    <div className="grid grid-cols-16 gap-1">
+  const renderRow = (numbers: number[], arch: string) => (
+    <div role="group" aria-label={t(arch)} className="grid grid-cols-16 gap-1">
       {numbers.map((number) => (
         <Tooth key={number} number={number} condition={value[number] ?? "Healthy"}
           states={surfaceValue[number] ?? {}} selected={selectedTeeth.includes(number)}
@@ -270,7 +280,7 @@ export function DentalChart({
   );
 
   return (
-    <div className="min-w-0 space-y-4" data-no-translate>
+    <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="text-xs font-semibold text-foreground">{t("Surface findings")}</p>
@@ -292,13 +302,13 @@ export function DentalChart({
             </div>
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-1/2 border-s border-dashed border-primary/20" />
-              {renderRow(Array.from({ length: 16 }, (_, index) => index + 1))}
+              {renderRow(Array.from({ length: 16 }, (_, index) => index + 1), "Upper arch")}
               <div className="relative my-3 flex items-center gap-4">
                 <div className="h-px flex-1 bg-border" />
                 <span className="rounded-full border bg-background px-3 py-1 text-[9px] font-medium uppercase tracking-widest text-muted-foreground">{t("Midline")}</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
-              {renderRow(Array.from({ length: 16 }, (_, index) => 32 - index))}
+              {renderRow(Array.from({ length: 16 }, (_, index) => 32 - index), "Lower arch")}
             </div>
             <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("Lower arch")}</p>
           </div>
@@ -313,7 +323,7 @@ export function DentalChart({
                 <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Check className="size-4" /></span>
                 <div>
                   <p className="text-sm font-semibold" aria-live="polite">{selectedTeeth.length} {t(selectedTeeth.length === 1 ? "tooth selected" : "teeth selected")}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground" dir="ltr">#{selectedTeeth.join(", #")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground" dir="ltr" data-no-translate>#{selectedTeeth.join(", #")}</p>
                 </div>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedTeeth([])}><RotateCcw />{t("Clear selection")}</Button>
